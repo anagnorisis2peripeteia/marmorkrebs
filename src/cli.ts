@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { getChangedFilesFromGit } from "./git-changed-files.js";
 import { runMutationAnalysis } from "./runner.js";
 import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.js";
 
@@ -12,6 +13,7 @@ function usage(): never {
 
 Usage:
   marmorkrebs --dir <path> --tool <tool> --changed-files <file,...> [options]
+  marmorkrebs --dir <path> --tool <tool> --base <ref> [options]
   marmorkrebs --repo <owner/repo> --pr <number> --tool <tool> [options]
 
 Options:
@@ -20,6 +22,9 @@ Options:
   --pr <number>             PR number (used with --repo to get changed files)
   --tool <tool>             Mutation tool: stryker | go-mutesting | gomu | cargo-mutants | mutmut
   --changed-files <files>   Comma-separated list of changed files
+  --base <ref>              Derive changed files from the local git diff vs <ref>
+                            (branch commits since merge-base + staged/unstaged +
+                            untracked) — for locally staged PRs, nothing pushed
   --test-command <cmd>      Custom test command (default: tool-specific)
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
@@ -42,6 +47,7 @@ function parseCliArgs(argv: string[]): {
   dir?: string;
   repo?: string;
   pr?: number;
+  base?: string;
   tool: MutationTool;
   changedFiles?: string[];
   testCommand?: string;
@@ -78,6 +84,7 @@ function parseCliArgs(argv: string[]): {
   if (args.dir) result.dir = resolve(args.dir);
   if (args.repo) result.repo = args.repo;
   if (args.pr) result.pr = parseInt(args.pr, 10);
+  if (args.base) result.base = args.base;
   if (args["changed-files"]) result.changedFiles = args["changed-files"].split(",");
   if (args["test-command"]) result.testCommand = args["test-command"];
   if (args.timeout) result.timeout = parseInt(args.timeout, 10);
@@ -138,8 +145,22 @@ function main(): void {
     }
   }
 
+  if (!changedFiles && opts.base) {
+    try {
+      changedFiles = getChangedFilesFromGit(repoDir, opts.base);
+      console.error(
+        `[marmorkrebs] ${changedFiles.length} changed files from local diff vs ${opts.base}`,
+      );
+    } catch (error) {
+      console.error(
+        `Error deriving local diff: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      process.exit(1);
+    }
+  }
+
   if (!changedFiles || !changedFiles.length) {
-    console.error("Error: no changed files (use --changed-files or --repo --pr)");
+    console.error("Error: no changed files (use --changed-files, --base, or --repo --pr)");
     process.exit(1);
   }
 

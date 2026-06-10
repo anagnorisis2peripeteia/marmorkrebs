@@ -22,12 +22,14 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 
 ```
 marmorkrebs --dir <path> --tool <tool> --changed-files <file,...> [options]
+marmorkrebs --dir <path> --tool <tool> --base <ref> [options]
 marmorkrebs --repo <owner/repo> --pr <number> --tool <tool> [options]
 ```
 
 Key options:
 
 - `--repo` + `--pr` — derive the changed-file list from a GitHub PR (requires `gh` CLI)
+- `--base <ref>` — derive it from the **local git diff** vs `<ref>`: branch commits since the merge-base, plus staged/unstaged edits and untracked files. This is the mode for locally staged PRs — review-grade mutation testing before anything is pushed.
 - `--changed-files` — or pass the file list explicitly
 - `--test-command <cmd>` — override the tool-default test command
 - `--threshold <0-1>` — fail the run below a minimum mutation score
