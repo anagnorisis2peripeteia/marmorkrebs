@@ -1,0 +1,213 @@
+import { spawnSync } from "node:child_process";
+import {
+  crabboxCleanup,
+  crabboxExec,
+  crabboxProvision,
+  crabboxStop,
+  crabboxSync,
+} from "./crabbox-client.js";
+import {
+  buildCargoMutantsCommand,
+  buildGoMutestingCommand,
+  buildGomuCommand,
+  buildMutmutCommand,
+  buildStrykerCommand,
+  parseCargoMutants,
+  parseGoMutesting,
+  parseGomu,
+  parseMutmut,
+  parseStryker,
+} from "./parsers/index.js";
+import {
+  EMPTY_RESULT,
+  type CrabboxLease,
+  type MutationConfig,
+  type MutationResult,
+  type MutationTool,
+} from "./types.js";
+
+export function runMutationAnalysis(
+  repoDir: string,
+  changedFiles: string[],
+  config: MutationConfig,
+): MutationResult {
+  if (!changedFiles.length) return { ...EMPTY_RESULT, tool: config.tool };
+
+  const sourceFiles = filterSourceFiles(changedFiles, config.tool);
+  if (!sourceFiles.length) return { ...EMPTY_RESULT, tool: config.tool };
+
+  const startMs = Date.now();
+
+  if (config.leaseId) {
+    return runOnExistingLease(repoDir, sourceFiles, config, config.leaseId, startMs);
+  }
+  if (config.crabbox) {
+    return runInCrabbox(repoDir, sourceFiles, config, startMs);
+  }
+  return runLocally(repoDir, sourceFiles, config, startMs);
+}
+
+function runOnExistingLease(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  leaseId: string,
+  startMs: number,
+): MutationResult {
+  try {
+    const remoteDir = config.remoteDir ?? "/tmp/mutation-target";
+    if (!config.skipSync) {
+      crabboxSync(leaseId, repoDir, remoteDir);
+    }
+
+    const command = buildCommand(config, sourceFiles, remoteDir);
+    const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
+    const result = crabboxExec(leaseId, command, timeoutMs);
+
+    const parsed = parseOutput(config.tool, result.stdout, result.stderr);
+    return { ...parsed, elapsedMs: Date.now() - startMs };
+  } catch (error) {
+    return {
+      ...EMPTY_RESULT,
+      tool: config.tool,
+      error: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+}
+
+function runInCrabbox(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  startMs: number,
+): MutationResult {
+  let lease: CrabboxLease | null = null;
+  try {
+    lease = crabboxProvision(config.crabbox!);
+    const remoteDir = "/tmp/mutation-target";
+    crabboxSync(lease.id, repoDir, remoteDir);
+
+    const command = buildCommand(config, sourceFiles, remoteDir);
+    const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
+    const result = crabboxExec(lease.id, command, timeoutMs);
+
+    const parsed = parseOutput(config.tool, result.stdout, result.stderr);
+    return { ...parsed, elapsedMs: Date.now() - startMs };
+  } catch (error) {
+    return {
+      ...EMPTY_RESULT,
+      tool: config.tool,
+      error: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - startMs,
+    };
+  } finally {
+    if (lease) {
+      try {
+        crabboxStop(lease.id);
+        crabboxCleanup(lease.id);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  }
+}
+
+function runLocally(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  startMs: number,
+): MutationResult {
+  const command = buildCommand(config, sourceFiles, repoDir);
+
+  const result = spawnSync("bash", ["-c", command], {
+    cwd: repoDir,
+    encoding: "utf8" as const,
+    timeout: config.timeoutMs ?? 8 * 60 * 1000,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+  try {
+    const parsed = parseOutput(config.tool, result.stdout ?? "", result.stderr ?? "");
+    return { ...parsed, elapsedMs: Date.now() - startMs };
+  } catch (error) {
+    return {
+      ...EMPTY_RESULT,
+      tool: config.tool,
+      error: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+}
+
+function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: string): string {
+  switch (config.tool) {
+    case "go-mutesting":
+      return buildGoMutestingCommand(sourceFiles, workDir);
+    case "stryker":
+      return buildStrykerCommand(sourceFiles, workDir);
+    case "cargo-mutants":
+      return buildCargoMutantsCommand(sourceFiles, workDir);
+    case "mutmut":
+      return buildMutmutCommand(sourceFiles, workDir, config.testCommand);
+    case "gomu":
+      return buildGomuCommand(sourceFiles, workDir);
+    default:
+      throw new Error(`Unsupported mutation tool: ${config.tool}`);
+  }
+}
+
+function parseOutput(tool: MutationTool, stdout: string, stderr: string): MutationResult {
+  switch (tool) {
+    case "go-mutesting":
+      return parseGoMutesting(stdout + "\n" + stderr);
+    case "gomu":
+      return parseGomu(stdout);
+    case "stryker":
+      return parseStryker(stdout);
+    case "cargo-mutants":
+      return parseCargoMutants(stdout);
+    case "mutmut":
+      return parseMutmut(stdout);
+    default:
+      return { ...EMPTY_RESULT, tool, error: `Unknown tool: ${tool}` };
+  }
+}
+
+function filterSourceFiles(files: string[], tool: MutationTool): string[] {
+  const extensions = sourceExtensions(tool);
+  return files.filter((file) => {
+    const lower = file.toLowerCase();
+    if (isTestFile(lower)) return false;
+    return extensions.some((ext) => lower.endsWith(ext));
+  });
+}
+
+function sourceExtensions(tool: MutationTool): string[] {
+  switch (tool) {
+    case "go-mutesting":
+    case "gomu":
+      return [".go"];
+    case "stryker":
+      return [".ts", ".tsx", ".js", ".jsx"];
+    case "cargo-mutants":
+      return [".rs"];
+    case "mutmut":
+      return [".py"];
+    default:
+      return [];
+  }
+}
+
+function isTestFile(file: string): boolean {
+  return (
+    file.includes("_test.") ||
+    file.includes(".test.") ||
+    file.includes(".spec.") ||
+    file.includes("/test/") ||
+    file.includes("/tests/") ||
+    file.includes("/__tests__/") ||
+    file.endsWith("_test.go")
+  );
+}

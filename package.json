@@ -1,0 +1,21 @@
+{
+  "name": "marmorkrebs",
+  "version": "0.1.0",
+  "description": "Mutation testing for PRs via crabbox execution environments",
+  "type": "module",
+  "bin": {
+    "marmorkrebs": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/**/*.test.js",
+    "check": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}
