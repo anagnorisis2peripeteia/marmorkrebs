@@ -8,6 +8,7 @@ import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.
 
 const TOOLS: ReadonlySet<string> = new Set([
   "stryker",
+  "stryker-net",
   "go-mutesting",
   "gomu",
   "cargo-mutants",
@@ -27,7 +28,7 @@ Options:
   --dir <path>              Local checkout directory
   --repo <owner/repo>       GitHub repository (requires gh CLI)
   --pr <number>             PR number (used with --repo to get changed files)
-  --tool <tool>             Mutation tool: stryker | go-mutesting | gomu | cargo-mutants | mutmut | cxx-source
+  --tool <tool>             Mutation tool: stryker | stryker-net | go-mutesting | gomu | cargo-mutants | mutmut | cxx-source
   --changed-files <files>   Comma-separated list of changed files
   --base <ref>              Derive changed files from the local git diff vs <ref>
                             (branch commits since merge-base + staged/unstaged +

@@ -11,6 +11,7 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | Tool | Ecosystem |
 |---|---|
 | `stryker` | JS/TS (Stryker) |
+| `stryker-net` | C# / .NET (Stryker.NET) |
 | `mutmut` | Python |
 | `cargo-mutants` | Rust |
 | `go-mutesting` | Go |

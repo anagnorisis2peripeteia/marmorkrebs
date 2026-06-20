@@ -1,0 +1,92 @@
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+
+// Stryker.NET (`dotnet stryker`) emits the same mutation-testing-elements JSON schema as
+// StrykerJS (files -> mutants -> status), so parsing mirrors the stryker parser. Unlike
+// StrykerJS, the command writes the report to a file under StrykerOutput/, so
+// buildStrykerNetCommand cats that report to stdout for parsing here.
+export function parseStrykerNet(output: string): MutationResult {
+  const mutants: SurvivingMutant[] = [];
+  let killed = 0;
+  let survived = 0;
+  let timeout = 0;
+  let noCoverage = 0;
+
+  try {
+    const jsonStart = output.indexOf("{");
+    const jsonEnd = output.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON output from Stryker.NET");
+
+    const report = JSON.parse(output.slice(jsonStart, jsonEnd + 1));
+    const files = report.files ?? {};
+
+    for (const [filePath, fileData] of Object.entries(files) as [string, any][]) {
+      for (const mutant of fileData.mutants ?? []) {
+        switch (mutant.status) {
+          case "Killed":
+            killed++;
+            break;
+          case "Survived":
+            survived++;
+            mutants.push({
+              file: filePath,
+              line: mutant.location?.start?.line ?? 0,
+              mutator: mutant.mutatorName ?? "unknown",
+              description: mutant.replacement ?? mutant.description ?? "survived mutant",
+              status: "survived",
+            });
+            break;
+          case "Timeout":
+            timeout++;
+            break;
+          case "NoCoverage":
+            noCoverage++;
+            mutants.push({
+              file: filePath,
+              line: mutant.location?.start?.line ?? 0,
+              mutator: mutant.mutatorName ?? "unknown",
+              description: "no test covers this code path",
+              status: "no_coverage",
+            });
+            break;
+        }
+      }
+    }
+  } catch (error) {
+    return {
+      ...EMPTY_RESULT,
+      tool: "stryker-net",
+      error: `Failed to parse Stryker.NET output: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const denominator = killed + survived + noCoverage;
+  return {
+    tool: "stryker-net",
+    totalMutants: killed + survived + timeout + noCoverage,
+    killed,
+    survived,
+    timeout,
+    noCoverage,
+    score: denominator > 0 ? Math.round((killed / denominator) * 100) / 100 : 1,
+    survivingMutants: mutants,
+    error: null,
+    elapsedMs: 0,
+  };
+}
+
+export function buildStrykerNetCommand(sourceFiles: string[], workDir: string): string {
+  // Stryker.NET takes one or more `--mutate` glob patterns; repo-relative file paths work
+  // as degenerate globs. The json reporter writes the report to a file under the output
+  // folder, so run quietly and cat that report to stdout for parseStrykerNet (clean JSON).
+  const mutateArgs = sourceFiles.map((f) => `--mutate '${shellEscape(f)}'`).join(" ");
+  const escWork = shellEscape(workDir);
+  return (
+    `cd '${escWork}' && ` +
+    `dotnet stryker ${mutateArgs} --reporter json --output .marmorkrebs-stryker >/dev/null 2>&1; ` +
+    `cat "$(find .marmorkrebs-stryker StrykerOutput -name mutation-report.json -path '*reports*' 2>/dev/null | sort | tail -1)" 2>/dev/null`
+  );
+}
+
+function shellEscape(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}

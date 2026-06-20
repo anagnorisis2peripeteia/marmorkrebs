@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   crabboxCleanup,
   crabboxExec,
@@ -13,12 +15,14 @@ import {
   buildGomuCommand,
   buildMutmutCommand,
   buildStrykerCommand,
+  buildStrykerNetCommand,
   parseCargoMutants,
   parseCxxSource,
   parseGoMutesting,
   parseGomu,
   parseMutmut,
   parseStryker,
+  parseStrykerNet,
 } from "./parsers/index.js";
 import {
   EMPTY_RESULT,
@@ -131,7 +135,17 @@ function runLocally(
   });
 
   try {
-    const parsed = parseOutput(config.tool, result.stdout ?? "", result.stderr ?? "");
+    // Stryker's "json" reporter writes a FILE, not stdout — prefer it when present.
+    let stdout = result.stdout ?? "";
+    if (config.tool === "stryker") {
+      try {
+        const report = readFileSync(join(repoDir, "reports/mutation/mutation.json"), "utf8");
+        if (report.trim()) stdout = report;
+      } catch {
+        // fall back to stdout
+      }
+    }
+    const parsed = parseOutput(config.tool, stdout, result.stderr ?? "");
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -149,6 +163,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
       return buildGoMutestingCommand(sourceFiles, workDir);
     case "stryker":
       return buildStrykerCommand(sourceFiles, workDir);
+    case "stryker-net":
+      return buildStrykerNetCommand(sourceFiles, workDir);
     case "cargo-mutants":
       return buildCargoMutantsCommand(sourceFiles, workDir);
     case "mutmut":
@@ -170,6 +186,8 @@ function parseOutput(tool: MutationTool, stdout: string, stderr: string): Mutati
       return parseGomu(stdout);
     case "stryker":
       return parseStryker(stdout);
+    case "stryker-net":
+      return parseStrykerNet(stdout);
     case "cargo-mutants":
       return parseCargoMutants(stdout);
     case "mutmut":
@@ -184,7 +202,9 @@ function parseOutput(tool: MutationTool, stdout: string, stderr: string): Mutati
 function filterSourceFiles(files: string[], tool: MutationTool): string[] {
   const extensions = sourceExtensions(tool);
   return files.filter((file) => {
-    const lower = file.toLowerCase();
+    // Strip a trailing line-range (e.g. "index.ts:1-388" / "index.ts:42") before the extension
+    // check so focused mutation on PR-touched lines passes the filter.
+    const lower = file.toLowerCase().replace(/:\d+(?:-\d+)?$/, "");
     if (isTestFile(lower)) return false;
     return extensions.some((ext) => lower.endsWith(ext));
   });
@@ -197,6 +217,8 @@ function sourceExtensions(tool: MutationTool): string[] {
       return [".go"];
     case "stryker":
       return [".ts", ".tsx", ".js", ".jsx"];
+    case "stryker-net":
+      return [".cs"];
     case "cargo-mutants":
       return [".rs"];
     case "mutmut":
