@@ -4,7 +4,7 @@ PR-scoped mutation testing, optionally executed inside [crabbox](https://github.
 
 Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the mutation run on **the lines a PR actually touched**, then reports a mutation score for exactly that surface. Use it as a PR proof step: "the new tests kill N/M mutants on the changed lines."
 
-> Named after the marbled crayfish — a mutant crustacean that took over the world. Sibling tooling to crabbox/ClawSweeper/mantis in the openclaw proof ecosystem.
+> Named after the marbled crayfish — a mutant crustacean that took over the world. Sibling tooling to crabbox in the proof ecosystem.
 
 ## Supported mutation tools
 
@@ -15,8 +15,22 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `cargo-mutants` | Rust |
 | `go-mutesting` | Go |
 | `gomu` | Go |
+| `cxx-source` | C++/ObjC++ (built-in source engine) |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage per mutant, plus score).
+
+### `cxx-source` (built-in C++/ObjC++ engine)
+
+There is no external mutation CLI to drive for C++/ObjC++, so marmorkrebs ships its own source-mutation engine at `engines/cxx-source/marmorkrebs-cxx.py`. It applies Stryker-style operators (conditional-boundary, equality, logical, boolean-literal) to one source token at a time, then for **each** mutant **recompiles** the project (via `--build-command`) and re-runs a targeted test command (`--test-command`), classifying the mutant as KILLED (tests failed — good), SURVIVED (tests still passed — a coverage gap), or BUILD_ERROR (skipped, didn't compile).
+
+`mull` (LLVM-bitcode mutation) is not used because it needs a self-contained test binary to toggle mutants in. This engine instead recompiles per mutant, which fits projects built as a single library and driven by an external test runner. Because each mutant triggers a full rebuild, scope the run tightly — `--base <ref>` restricts it to the lines a PR changed.
+
+`--build-command` is **required** for `cxx-source` (along with `--test-command`).
+
+```
+marmorkrebs --dir <path> --tool cxx-source --base <ref> \
+  --build-command '<compile>' --test-command '<targeted tests>'
+```
 
 ## Usage
 
@@ -32,6 +46,7 @@ Key options:
 - `--base <ref>` — derive it from the **local git diff** vs `<ref>`: branch commits since the merge-base, plus staged/unstaged edits and untracked files. This is the mode for locally staged PRs — review-grade mutation testing before anything is pushed.
 - `--changed-files` — or pass the file list explicitly
 - `--test-command <cmd>` — override the tool-default test command
+- `--build-command <cmd>` — build run between mutants (**required** for `cxx-source`)
 - `--threshold <0-1>` — fail the run below a minimum mutation score
 - `--timeout <ms>` — mutation run timeout (default 480000)
 

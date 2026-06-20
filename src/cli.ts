@@ -6,7 +6,14 @@ import { getChangedFilesFromGit } from "./git-changed-files.js";
 import { runMutationAnalysis } from "./runner.js";
 import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.js";
 
-const TOOLS: ReadonlySet<string> = new Set(["stryker", "go-mutesting", "gomu", "cargo-mutants", "mutmut"]);
+const TOOLS: ReadonlySet<string> = new Set([
+  "stryker",
+  "go-mutesting",
+  "gomu",
+  "cargo-mutants",
+  "mutmut",
+  "cxx-source",
+]);
 
 function usage(): never {
   console.error(`marmorkrebs - mutation testing for PRs via crabbox
@@ -20,12 +27,13 @@ Options:
   --dir <path>              Local checkout directory
   --repo <owner/repo>       GitHub repository (requires gh CLI)
   --pr <number>             PR number (used with --repo to get changed files)
-  --tool <tool>             Mutation tool: stryker | go-mutesting | gomu | cargo-mutants | mutmut
+  --tool <tool>             Mutation tool: stryker | go-mutesting | gomu | cargo-mutants | mutmut | cxx-source
   --changed-files <files>   Comma-separated list of changed files
   --base <ref>              Derive changed files from the local git diff vs <ref>
                             (branch commits since merge-base + staged/unstaged +
                             untracked) — for locally staged PRs, nothing pushed
   --test-command <cmd>      Custom test command (default: tool-specific)
+  --build-command <cmd>     Build command run between mutants (required for cxx-source)
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
 
@@ -51,6 +59,7 @@ function parseCliArgs(argv: string[]): {
   tool: MutationTool;
   changedFiles?: string[];
   testCommand?: string;
+  buildCommand?: string;
   timeout?: number;
   threshold?: number;
   leaseId?: string;
@@ -87,6 +96,7 @@ function parseCliArgs(argv: string[]): {
   if (args.base) result.base = args.base;
   if (args["changed-files"]) result.changedFiles = args["changed-files"].split(",");
   if (args["test-command"]) result.testCommand = args["test-command"];
+  if (args["build-command"]) result.buildCommand = args["build-command"];
   if (args.timeout) result.timeout = parseInt(args.timeout, 10);
   if (args.threshold) result.threshold = parseFloat(args.threshold);
 
@@ -167,6 +177,8 @@ function main(): void {
   const config: MutationConfig = {
     tool: opts.tool,
     testCommand: opts.testCommand,
+    buildCommand: opts.buildCommand,
+    base: opts.base,
     timeoutMs: opts.timeout,
     threshold: opts.threshold,
     leaseId: opts.leaseId,

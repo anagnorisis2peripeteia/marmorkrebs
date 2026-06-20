@@ -8,11 +8,13 @@ import {
 } from "./crabbox-client.js";
 import {
   buildCargoMutantsCommand,
+  buildCxxSourceCommand,
   buildGoMutestingCommand,
   buildGomuCommand,
   buildMutmutCommand,
   buildStrykerCommand,
   parseCargoMutants,
+  parseCxxSource,
   parseGoMutesting,
   parseGomu,
   parseMutmut,
@@ -153,6 +155,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
       return buildMutmutCommand(sourceFiles, workDir, config.testCommand);
     case "gomu":
       return buildGomuCommand(sourceFiles, workDir);
+    case "cxx-source":
+      return buildCxxSourceCommand(sourceFiles, workDir, config);
     default:
       throw new Error(`Unsupported mutation tool: ${config.tool}`);
   }
@@ -170,6 +174,8 @@ function parseOutput(tool: MutationTool, stdout: string, stderr: string): Mutati
       return parseCargoMutants(stdout);
     case "mutmut":
       return parseMutmut(stdout);
+    case "cxx-source":
+      return parseCxxSource(stdout);
     default:
       return { ...EMPTY_RESULT, tool, error: `Unknown tool: ${tool}` };
   }
@@ -195,6 +201,8 @@ function sourceExtensions(tool: MutationTool): string[] {
       return [".rs"];
     case "mutmut":
       return [".py"];
+    case "cxx-source":
+      return [".cpp", ".cc", ".cxx", ".c", ".mm", ".m", ".h", ".hpp", ".metal"];
     default:
       return [];
   }

@@ -1,4 +1,4 @@
-export type MutationTool = "stryker" | "go-mutesting" | "cargo-mutants" | "mutmut" | "gomu";
+export type MutationTool = "stryker" | "go-mutesting" | "cargo-mutants" | "mutmut" | "gomu" | "cxx-source";
 
 export interface CrabboxLeaseOptions {
   provider: string;
@@ -23,6 +23,8 @@ export interface CrabboxRunResult {
 export interface MutationConfig {
   tool: MutationTool;
   testCommand?: string;
+  buildCommand?: string;
+  base?: string;
   threshold?: number;
   timeoutMs?: number;
   leaseId?: string;
