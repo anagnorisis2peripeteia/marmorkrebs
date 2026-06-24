@@ -162,7 +162,7 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
     case "go-mutesting":
       return buildGoMutestingCommand(sourceFiles, workDir);
     case "stryker":
-      return buildStrykerCommand(sourceFiles, workDir);
+      return buildStrykerCommand(sourceFiles, workDir, config.testCommand);
     case "stryker-net":
       return buildStrykerNetCommand(sourceFiles, workDir);
     case "cargo-mutants":
