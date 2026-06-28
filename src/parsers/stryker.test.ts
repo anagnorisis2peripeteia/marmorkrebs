@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseStryker } from "./stryker.js";
+import { buildStrykerCommand, parseStryker } from "./stryker.js";
 
 describe("parseStryker", () => {
   it("parses Stryker JSON report", () => {
@@ -70,5 +70,19 @@ describe("parseStryker", () => {
     assert.equal(result.killed, 0);
     assert.equal(result.survived, 0);
     assert.equal(result.score, 1);
+  });
+
+  it("builds commands that emit the JSON report file to stdout", () => {
+    const command = buildStrykerCommand(["src/config.ts"], "/repo");
+    assert.match(command, /stryker run --mutate/);
+    assert.match(command, /1>&2/);
+    assert.match(command, /cat reports\/mutation\/mutation\.json/);
+  });
+
+  it("builds command-runner commands that emit the JSON report file to stdout", () => {
+    const command = buildStrykerCommand(["src/config.ts"], "/repo", "npm test -- config");
+    assert.match(command, /stryker run \.marmorkrebs-stryker\.json/);
+    assert.match(command, /1>&2/);
+    assert.match(command, /cat reports\/mutation\/mutation\.json/);
   });
 });

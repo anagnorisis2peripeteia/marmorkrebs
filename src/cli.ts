@@ -37,6 +37,9 @@ Options:
   --build-command <cmd>     Build command run between mutants (required for cxx-source)
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
+  --max-mutants <n>         cxx-source only: cap mutants after discovery
+  --include-metal           cxx-source only: mutate .metal files instead of skipping them
+  --mutators <names>        cxx-source only: comma-separated mutator names
 
 Crabbox options (omit all for local execution):
   --lease-id <id>           Reuse an existing crabbox lease (skips provision+cleanup)
@@ -63,12 +66,15 @@ function parseCliArgs(argv: string[]): {
   buildCommand?: string;
   timeout?: number;
   threshold?: number;
+  maxMutants?: number;
+  includeMetal?: boolean;
+  mutators?: string;
   leaseId?: string;
   skipSync?: boolean;
   remoteDir?: string;
   crabbox?: CrabboxLeaseOptions;
 } {
-  const BOOLEAN_FLAGS = new Set(["skip-sync"]);
+  const BOOLEAN_FLAGS = new Set(["skip-sync", "include-metal"]);
   const args: Record<string, string> = {};
   for (let i = 2; i < argv.length; i++) {
     const key = argv[i];
@@ -100,6 +106,9 @@ function parseCliArgs(argv: string[]): {
   if (args["build-command"]) result.buildCommand = args["build-command"];
   if (args.timeout) result.timeout = parseInt(args.timeout, 10);
   if (args.threshold) result.threshold = parseFloat(args.threshold);
+  if (args["max-mutants"]) result.maxMutants = parseInt(args["max-mutants"], 10);
+  if ("include-metal" in args) result.includeMetal = true;
+  if (args.mutators) result.mutators = args.mutators;
 
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
@@ -182,6 +191,9 @@ function main(): void {
     base: opts.base,
     timeoutMs: opts.timeout,
     threshold: opts.threshold,
+    maxMutants: opts.maxMutants,
+    includeMetal: opts.includeMetal,
+    mutators: opts.mutators,
     leaseId: opts.leaseId,
     skipSync: opts.skipSync,
     remoteDir: opts.remoteDir,

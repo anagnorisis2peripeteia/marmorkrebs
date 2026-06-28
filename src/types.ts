@@ -27,6 +27,9 @@ export interface MutationConfig {
   base?: string;
   threshold?: number;
   timeoutMs?: number;
+  maxMutants?: number;
+  includeMetal?: boolean;
+  mutators?: string;
   leaseId?: string;
   skipSync?: boolean;
   remoteDir?: string;

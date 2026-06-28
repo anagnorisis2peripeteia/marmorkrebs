@@ -76,3 +76,7 @@ Node >= 20. `test-fixtures/` holds real captured outputs from each mutation tool
 marmorkrebs --repo openclaw/openclaw --pr 12345 --tool stryker \
   --threshold 0.6 --provider local-container --image deps-base
 ```
+
+## Local and PR usage
+
+Marmorkrebs can run before a pull request exists. See [docs/local-vs-pr-usage.md](docs/local-vs-pr-usage.md) for the local `--base` flow, manual changed-file flow, PR flow, and C++/Metal mutation controls.

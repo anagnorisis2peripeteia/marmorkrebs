@@ -103,11 +103,16 @@ export function buildStrykerCommand(
     return (
       `${ensure} && cd '${wd}' && { ${exclude}; } && ` +
       `printf '%s' '${cfg}' > .marmorkrebs-stryker.json && ` +
-      `stryker run .marmorkrebs-stryker.json 2>&1; ` +
-      `code=$?; rm -f .marmorkrebs-stryker.json; exit $code`
+      `stryker run .marmorkrebs-stryker.json 1>&2; ` +
+      `code=$?; cat reports/mutation/mutation.json 2>/dev/null; ` +
+      `rm -f .marmorkrebs-stryker.json; exit $code`
     );
   }
-  return `${ensure} && cd '${wd}' && { ${exclude}; } && stryker run --mutate ${mutateGlobs} --reporters json 2>&1`;
+  return (
+    `${ensure} && cd '${wd}' && { ${exclude}; } && ` +
+    `stryker run --mutate ${mutateGlobs} --reporters json 1>&2; ` +
+    `code=$?; cat reports/mutation/mutation.json 2>/dev/null; exit $code`
+  );
 }
 
 function shellEscape(s: string): string {

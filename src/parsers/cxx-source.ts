@@ -58,6 +58,15 @@ export function buildCxxSourceCommand(
   }
   parts.push("--build-cmd", `'${shellEscape(config.buildCommand)}'`);
   parts.push("--test-cmd", `'${shellEscape(config.testCommand)}'`);
+  if (config.maxMutants !== undefined) {
+    parts.push("--max-mutants", String(config.maxMutants));
+  }
+  if (config.includeMetal) {
+    parts.push("--include-metal");
+  }
+  if (config.mutators) {
+    parts.push("--mutators", `'${shellEscape(config.mutators)}'`);
+  }
 
   // The engine's own progress goes to stdout; redirect it to stderr and emit
   // only the JSON report (written to a temp file) on stdout.
