@@ -80,3 +80,7 @@ marmorkrebs --repo openclaw/openclaw --pr 12345 --tool stryker \
 ## Local and PR usage
 
 Marmorkrebs can run before a pull request exists. See [docs/local-vs-pr-usage.md](docs/local-vs-pr-usage.md) for the local `--base` flow, manual changed-file flow, PR flow, and C++/Metal mutation controls.
+
+## Standalone C++ mutation tool spec
+
+The embedded `cxx-source` engine is intended to graduate into an independent tool. See [docs/cxx-mutant-spec.md](docs/cxx-mutant-spec.md) for the proposed standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.
