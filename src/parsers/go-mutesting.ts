@@ -42,6 +42,7 @@ export function parseGoMutesting(output: string): MutationResult {
     survived,
     timeout,
     noCoverage: 0,
+    ignored: 0,
     score: Math.round(score * 100) / 100,
     survivingMutants: mutants,
     error: null,

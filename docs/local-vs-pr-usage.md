@@ -87,10 +87,11 @@ Use `--include-metal` only when the test command actually exercises the shader p
 A successful run exits zero and writes a `MutationResult` JSON object to stdout. Important fields are:
 
 - `score`: mutation score for the scoped run.
-- `totalMutants`: number of mutants actually executed.
+- `totalMutants`: number of mutants reported for the scoped run.
+- `ignored`: mutants suppressed by Stryker-style ignore comments and excluded from score.
 - `survivingMutants`: mutants not killed by the selected tests.
 
-For PR gates, treat `totalMutants: 0` as vacuous proof rather than strong evidence. A survivor is a signal that the test plan may not cover the behavior being changed.
+For PR gates, treat `totalMutants: 0` as vacuous proof rather than strong evidence. Also treat `totalMutants - ignored == 0` as no scored mutation proof. A survivor is a signal that the test plan may not cover the behavior being changed.
 
 ## Relationship to ClawSweeper and local Mantis
 

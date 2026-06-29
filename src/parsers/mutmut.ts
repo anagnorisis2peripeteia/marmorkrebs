@@ -43,6 +43,7 @@ export function parseMutmut(output: string): MutationResult {
     survived,
     timeout,
     noCoverage: 0,
+    ignored: 0,
     score: total > 0 ? Math.round((killed / total) * 100) / 100 : 1,
     survivingMutants: mutants,
     error: null,

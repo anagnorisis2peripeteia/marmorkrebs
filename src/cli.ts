@@ -227,7 +227,7 @@ function main(): void {
   }
 
   console.error(
-    `[marmorkrebs] score=${Math.round(result.score * 100)}% killed=${result.killed} survived=${result.survived} elapsed=${result.elapsedMs}ms`,
+    `[marmorkrebs] score=${Math.round(result.score * 100)}% killed=${result.killed} survived=${result.survived} ignored=${result.ignored} elapsed=${result.elapsedMs}ms`,
   );
 
   if (opts.threshold !== undefined && result.score < opts.threshold) {

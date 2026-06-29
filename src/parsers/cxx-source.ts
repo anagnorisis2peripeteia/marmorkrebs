@@ -37,6 +37,7 @@ interface CxxReport {
   build_error?: number;
   buildErrors?: number;
   timeouts?: number;
+  ignored?: number;
   mutants: CxxMutant[];
   score: number;
   scorePercent?: number;
@@ -157,6 +158,7 @@ export function parseCxxSource(output: string, tool: MutationTool = "cxx-source"
   const survived = report.survived ?? 0;
   const buildError = report.buildErrors ?? report.build_error ?? 0;
   const timeout = report.timeouts ?? 0;
+  const ignored = report.ignored ?? (report.mutants ?? []).filter((m) => m.status === "IGNORED").length;
 
   const scored = killed + survived;
   let score: number;
@@ -183,11 +185,12 @@ export function parseCxxSource(output: string, tool: MutationTool = "cxx-source"
 
   return {
     tool,
-    totalMutants: report.totalMutants ?? report.total ?? scored + buildError + timeout,
+    totalMutants: report.totalMutants ?? report.total ?? scored + buildError + timeout + ignored,
     killed,
     survived,
     timeout,
     noCoverage: buildError,
+    ignored,
     score,
     survivingMutants,
     error: null,

@@ -155,6 +155,7 @@ unless the optional format switch is selected.
   "survived": 1,
   "buildErrors": 0,
   "timeouts": 0,
+  "ignored": 0,
   "mutants": [
     {
       "id": "src/foo.cpp:42:17:EqualityOperator:abc123",
@@ -180,6 +181,7 @@ Required compatibility notes:
 - The Marmorkrebs adapter can normalize older embedded reports that use percentages.
 - `totalMutants: 0` should be explicit so callers can distinguish vacuous proof from strong evidence.
 - Build errors should not silently improve the score; they should be counted separately.
+- Ignored mutants should remain visible in reports but excluded from Marmorkrebs score interpretation.
 
 ## Stryker compatibility seam
 
@@ -192,7 +194,7 @@ The first compatibility layer should be report-level:
 - Keep Stryker-style mutator names where the concepts match.
 - Emit stable mutant IDs.
 - Emit Stryker-style statuses in a report projection: `Killed`, `Survived`,
-  `NoCoverage`, `Timeout`, `Pending`, and infrastructure error statuses where needed.
+  `NoCoverage`, `Timeout`, `Ignored`, `Pending`, and infrastructure error statuses where needed.
 - Preserve source locations as start/end line and column ranges.
 - Include source text per file when generating the report projection.
 - Keep the native `stryker-cxx.report.v1` schema as the authoritative contract,
@@ -346,6 +348,7 @@ Marmorkrebs result mapping:
 - `survived` -> `MutationResult.survived`
 - `buildErrors` -> `MutationResult.noCoverage`
 - `timeouts` -> `MutationResult.timeout`
+- `ignored` -> `MutationResult.ignored`
 - `score` -> `MutationResult.score`
 - surviving mutants -> `MutationResult.survivingMutants`
 

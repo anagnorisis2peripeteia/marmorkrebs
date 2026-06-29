@@ -16,6 +16,7 @@ describe("parseStrykerNet", () => {
               location: { start: { line: 25 } },
             },
             { status: "NoCoverage", mutatorName: "BlockStatement", location: { start: { line: 42 } } },
+            { status: "Ignored", mutatorName: "EqualityOperator", location: { start: { line: 45 } } },
           ],
         },
         "src/OpenClaw.Shared/SettingsData.cs": {
@@ -34,7 +35,8 @@ describe("parseStrykerNet", () => {
     assert.equal(result.survived, 1);
     assert.equal(result.timeout, 1);
     assert.equal(result.noCoverage, 1);
-    assert.equal(result.totalMutants, 5);
+    assert.equal(result.ignored, 1);
+    assert.equal(result.totalMutants, 6);
     assert.equal(result.score, 0.5); // 2 / (2 + 1 + 1)
     assert.equal(result.survivingMutants.length, 2);
     assert.equal(result.survivingMutants[0].file, "src/OpenClaw.Shared/Capabilities/BrowserProxyCapability.cs");

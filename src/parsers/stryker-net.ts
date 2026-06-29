@@ -10,6 +10,7 @@ export function parseStrykerNet(output: string): MutationResult {
   let survived = 0;
   let timeout = 0;
   let noCoverage = 0;
+  let ignored = 0;
 
   try {
     const jsonStart = output.indexOf("{");
@@ -48,6 +49,9 @@ export function parseStrykerNet(output: string): MutationResult {
               status: "no_coverage",
             });
             break;
+          case "Ignored":
+            ignored++;
+            break;
         }
       }
     }
@@ -62,11 +66,12 @@ export function parseStrykerNet(output: string): MutationResult {
   const denominator = killed + survived + noCoverage;
   return {
     tool: "stryker-net",
-    totalMutants: killed + survived + timeout + noCoverage,
+    totalMutants: killed + survived + timeout + noCoverage + ignored,
     killed,
     survived,
     timeout,
     noCoverage,
+    ignored,
     score: denominator > 0 ? Math.round((killed / denominator) * 100) / 100 : 1,
     survivingMutants: mutants,
     error: null,

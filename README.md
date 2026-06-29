@@ -19,11 +19,11 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `stryker-cxx` | C++/ObjC++/Metal |
 | `cxx-source` | C++/ObjC++ legacy embedded fallback |
 
-Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage per mutant, plus score).
+Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
 ### `stryker-cxx` (C++/ObjC++/Metal)
 
-Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` applies source-level operators (conditional-boundary, equality, logical, boolean-literal) to one source token at a time, then for **each** mutant **recompiles** the project (via `--build-command`) and re-runs a targeted test command (`--test-command`), classifying the mutant as KILLED (tests failed), SURVIVED (tests still passed), or BUILD_ERROR (skipped, did not compile).
+Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` applies source-level operators to one source token or statement at a time, then for each non-ignored mutant recompiles the project (via `--build-command`) and re-runs a targeted test command (`--test-command`). Native statuses such as `KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED` are normalized into Marmorkrebs' common result shape.
 
 `mull` (LLVM-bitcode mutation) is not used because it needs a self-contained test binary to toggle mutants in. This engine instead recompiles per mutant, which fits projects built as a single library and driven by an external test runner. Because each mutant triggers a full rebuild, scope the run tightly — `--base <ref>` restricts it to the lines a PR changed.
 

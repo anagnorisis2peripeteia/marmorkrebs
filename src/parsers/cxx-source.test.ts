@@ -90,6 +90,7 @@ describe("parseCxxSource", () => {
       survived: 1,
       buildErrors: 0,
       timeouts: 0,
+      ignored: 1,
       score: 0.5,
       mutants: [
         {
@@ -114,6 +115,18 @@ describe("parseCxxSource", () => {
           status: "SURVIVED",
           detail: "all targeted tests passed",
         },
+        {
+          id: "aten/src/Reduce.mm:140:20:EqualityOperator:ignored",
+          mutator: "EqualityOperator",
+          file: "aten/src/Reduce.mm",
+          line: 140,
+          col: 20,
+          original: "==",
+          mutated: "!=",
+          status: "IGNORED",
+          detail: "equivalent generated comparison",
+          ignoreReason: "equivalent generated comparison",
+        },
       ],
       mutationTestingElements: {
         schemaVersion: "2.0",
@@ -129,6 +142,7 @@ describe("parseCxxSource", () => {
     assert.equal(result.survived, 1);
     assert.equal(result.timeout, 0);
     assert.equal(result.noCoverage, 0);
+    assert.equal(result.ignored, 1);
     assert.equal(result.totalMutants, 2);
     assert.equal(result.score, 0.5);
     assert.equal(result.survivingMutants.length, 1);
@@ -175,6 +189,7 @@ describe("parseCxxSource", () => {
     assert.equal(result.killed, 1);
     assert.equal(result.survived, 0);
     assert.equal(result.noCoverage, 1);
+    assert.equal(result.ignored, 0);
     assert.equal(result.totalMutants, 2);
     assert.equal(result.score, 1); // 100% -> 1.0
     assert.equal(result.survivingMutants.length, 0);
@@ -200,6 +215,37 @@ describe("parseCxxSource", () => {
     const result = parseCxxSource(JSON.stringify(report));
     assert.equal(result.killed, 0);
     assert.equal(result.survived, 0);
+    assert.equal(result.ignored, 0);
     assert.equal(result.score, 1);
+  });
+
+  it("parses ignored stryker-cxx mutants from status when count is absent", () => {
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      totalMutants: 1,
+      killed: 0,
+      survived: 0,
+      buildErrors: 0,
+      timeouts: 0,
+      score: 1,
+      mutants: [
+        {
+          mutator: "EqualityOperator",
+          file: "x.cpp",
+          line: 3,
+          col: 4,
+          original: "==",
+          mutated: "!=",
+          status: "IGNORED",
+          detail: "equivalent",
+        },
+      ],
+    };
+
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.equal(result.totalMutants, 1);
+    assert.equal(result.ignored, 1);
+    assert.equal(result.score, 1);
+    assert.equal(result.survivingMutants.length, 0);
   });
 });

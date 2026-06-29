@@ -60,6 +60,7 @@ export interface MutationResult {
   survived: number;
   timeout: number;
   noCoverage: number;
+  ignored: number;
   score: number;
   survivingMutants: SurvivingMutant[];
   error: string | null;
@@ -73,6 +74,7 @@ export const EMPTY_RESULT: MutationResult = {
   survived: 0,
   timeout: 0,
   noCoverage: 0,
+  ignored: 0,
   score: 1,
   survivingMutants: [],
   error: null,
