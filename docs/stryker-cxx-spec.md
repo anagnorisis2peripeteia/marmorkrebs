@@ -539,6 +539,9 @@ language-agnostic gate model.
 - Expand cross-tool workflow parity and hosted dashboard integrations.
 - Add deeper equivalent-mutant/logic reduction logic.
 
+These are explicit follow-on parity items for the broader Stryker ecosystem and
+do not block production PR-gate flows that use `marmorkrebs --tool stryker-cxx`.
+
 ## Acceptance criteria for independence
 
 The standalone tool is ready to be treated as independent when:
