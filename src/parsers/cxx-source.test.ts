@@ -72,8 +72,13 @@ describe("parseCxxSource", () => {
       buildSystem: "cmake",
       buildDir: "build",
       buildTarget: "target",
-      checkSystem: "clang-tidy",
-      checkArgs: "--checks=-*,bugprone-*",
+      xcodeWorkspace: "App.xcworkspace",
+      xcodeScheme: "AppTests",
+      xcodeConfiguration: "Debug",
+      xcodeSdk: "iphonesimulator",
+      xcodeDestination: "platform=iOS Simulator,name=iPhone 15",
+      checkSystem: "clang++",
+      checkArgs: "-std=c++20 -I include",
       testFilter: "Foo.*",
       testFramework: "gtest",
       testBinary: "./foo_tests",
@@ -89,6 +94,7 @@ describe("parseCxxSource", () => {
       thresholdLow: 0.7,
       thresholdBreak: 0.5,
       mode: "clang-ast",
+      equivalentSuppression: "off",
       coverageFile: "coverage.json",
       coverageProvider: "llvm-cov",
       coverageTestCommandTemplate: "pytest -k {tests_space}",
@@ -106,6 +112,7 @@ describe("parseCxxSource", () => {
       retainWorktreesFor: ["SURVIVED", "TIMEOUT"],
       retainedWorktreeTtlHours: 24,
       workerTmpDir: "/tmp/stryker-cxx-workers",
+      workerLabel: "pr-96205-proof",
       env: ["STRYKER_CXX_FLAG=yes"],
       envInherit: ["PATH"],
       envBlock: ["GITHUB_TOKEN"],
@@ -116,6 +123,10 @@ describe("parseCxxSource", () => {
       dashboardUploadUrl: "https://dashboard.example/upload",
       dashboardVersion: "1",
       dashboardRetentionDays: 14,
+      dashboardProject: "openclaw/stryker-cxx-fixture",
+      dashboardBranch: "feature/dashboard",
+      dashboardCommit: "abc123",
+      dashboardBuildUrl: "https://ci.example/build/123",
       dashboardAuthTokenEnv: "STRYKER_CXX_DASHBOARD_TOKEN",
       dashboardAuthHeader: "Authorization",
     });
@@ -127,8 +138,13 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--build-system 'cmake'"));
     assert.ok(command.includes("--build-dir 'build'"));
     assert.ok(command.includes("--build-target 'target'"));
-    assert.ok(command.includes("--check-system 'clang-tidy'"));
-    assert.ok(command.includes("--check-args '--checks=-*,bugprone-*'"));
+    assert.ok(command.includes("--xcode-workspace 'App.xcworkspace'"));
+    assert.ok(command.includes("--xcode-scheme 'AppTests'"));
+    assert.ok(command.includes("--xcode-configuration 'Debug'"));
+    assert.ok(command.includes("--xcode-sdk 'iphonesimulator'"));
+    assert.ok(command.includes("--xcode-destination 'platform=iOS Simulator,name=iPhone 15'"));
+    assert.ok(command.includes("--check-system 'clang++'"));
+    assert.ok(command.includes("--check-args '-std=c++20 -I include'"));
     assert.ok(command.includes("--test-filter 'Foo.*'"));
     assert.ok(command.includes("--test-framework 'gtest'"));
     assert.ok(command.includes("--test-binary './foo_tests'"));
@@ -143,6 +159,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--threshold-low 0.7"));
     assert.ok(command.includes("--threshold-break 0.5"));
     assert.ok(command.includes("--mode 'clang-ast'"));
+    assert.ok(command.includes("--equivalent-suppression 'off'"));
     assert.ok(command.includes("--coverage-file 'coverage.json'"));
     assert.ok(command.includes("--coverage-provider 'llvm-cov'"));
     assert.ok(command.includes("--coverage-test-command-template 'pytest -k {tests_space}'"));
@@ -164,6 +181,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--retain-worktrees-for 'SURVIVED,TIMEOUT'"));
     assert.ok(command.includes("--retained-worktree-ttl-hours 24"));
     assert.ok(command.includes("--worker-tmp-dir '/tmp/stryker-cxx-workers'"));
+    assert.ok(command.includes("--worker-label 'pr-96205-proof'"));
     assert.ok(command.includes("--env 'STRYKER_CXX_FLAG=yes'"));
     assert.ok(command.includes("--env-inherit 'PATH'"));
     assert.ok(command.includes("--env-block 'GITHUB_TOKEN'"));
@@ -174,6 +192,10 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--dashboard-upload-url 'https://dashboard.example/upload'"));
     assert.ok(command.includes("--dashboard-version '1'"));
     assert.ok(command.includes("--dashboard-retention-days 14"));
+    assert.ok(command.includes("--dashboard-project 'openclaw/stryker-cxx-fixture'"));
+    assert.ok(command.includes("--dashboard-branch 'feature/dashboard'"));
+    assert.ok(command.includes("--dashboard-commit 'abc123'"));
+    assert.ok(command.includes("--dashboard-build-url 'https://ci.example/build/123'"));
     assert.ok(command.includes("--dashboard-auth-token-env 'STRYKER_CXX_DASHBOARD_TOKEN'"));
     assert.ok(command.includes("--dashboard-auth-header 'Authorization'"));
   });

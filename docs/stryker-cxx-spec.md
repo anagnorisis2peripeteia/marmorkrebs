@@ -34,7 +34,8 @@ The current Marmorkrebs engine already provides the seed implementation:
 
 - Discovers changed lines via `git diff --unified=0 <base>`.
 - Restricts to caller-provided files and optional line ranges.
-- Generates token-level mutants while skipping comments and string/character literals.
+- Generates token-level mutants while skipping comments and string/character
+  literals by default.
 - Applies one source mutation at a time.
 - Runs caller-supplied build and test commands.
 - Classifies mutants as `KILLED`, `SURVIVED`, or `BUILD_ERROR`.
@@ -82,6 +83,11 @@ Mutation options:
 - `--include-metal`: include `.metal` files in token-level mode.
 - `--mode token|clang|clang-ast`: choose mutation implementation, default
   `token` initially.
+- `--equivalent-suppression off|conservative|aggressive`: choose native
+  equivalent/noise suppression mode; `conservative` is the standalone default
+  and covers generated-code markers, duplicate logical/bitwise operands,
+  duplicate conditional branches, arithmetic identities, and duplicate-operand
+  standard-library min/max calls.
 - `--dry-run-only`: validate the unmodified build/test lifecycle and stop.
 - `--skip-initial-test`: skip the unmodified build/test lifecycle for advanced or legacy flows.
 - `--check-command`: run a compile/type-check command after mutated build and before tests.
@@ -96,21 +102,32 @@ Mutation options:
 - `--incremental`, `--baseline-file`, `--baseline-max-age-days`,
   `--baseline-branch`, `--write-baseline`, `--clear-baseline`: reuse or update
   compatible baseline cache entries.
-- `--batch-mutants`, `--batch-size`: batch compatible mutants in isolated worktrees and split failed batches for attribution.
+- `stryker-cxx baseline-info`, `baseline-history`, `baseline-merge`, and
+  `baseline-prune`: inspect, visualize, merge, and trim native baseline caches
+  outside the Marmorkrebs run wrapper.
+- `--batch-mutants`, `--batch-size`: batch compatible mutants in isolated
+  worktrees using conservative proximity/source-structure heuristics and split
+  failed batches for attribution.
 - `--plugin`, `--plugin-dir`, `--reporter`: load local plugin manifests for mutators and reporter metadata.
-- `--build-system`, `--build-dir`, `--build-target`, `--check-system`,
-  `--check-args`, `--test-target`, `--test-filter`: synthesize common
-  CMake/CTest/Ninja/Make/Meson/Bazel build/test commands plus `clang-tidy` or
-  `cppcheck` checker commands.
+- `--build-system`, `--build-dir`, `--build-target`, `--xcode-workspace`,
+  `--xcode-project`, `--xcode-scheme`, `--xcode-configuration`,
+  `--xcode-sdk`, `--xcode-destination`, `--check-system`, `--check-args`,
+  `--test-target`, `--test-filter`: synthesize common
+  CMake/CTest/Ninja/Make/Meson/Bazel/Xcode build/test commands plus
+  `clang`/`clang++ -fsyntax-only`, `clang-tidy`, or `cppcheck` checker
+  commands.
 - `--test-framework`, `--test-binary`, `--xctest-bundle`,
   `--xctest-destination`, `--xctest-only-testing`, `--xctest-skip-testing`:
   synthesize GoogleTest, Catch2, doctest, or XCTest test commands, including
   xcodebuild-backed XCTest destination and target selection controls.
 - `--dashboard-export`, `--dashboard-upload-url`: write or explicitly upload dashboard JSON.
 - `--dashboard-version`, `--dashboard-retention-days`,
-  `--dashboard-auth-token-env`, `--dashboard-auth-header`: dashboard payload
-  compatibility, retention, and explicit upload-auth metadata forwarded to
-  `stryker-cxx`.
+  `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`,
+  `--dashboard-build-url`, `--dashboard-auth-token-env`,
+  `--dashboard-auth-header`: dashboard payload compatibility, retention, CI
+  provenance including tool version and run IDs, privacy/redaction metadata,
+  threshold-band status, explicit upload-auth metadata, and upload outcome
+  metadata forwarded to `stryker-cxx`.
 - release provenance workflow and adapter/plugin fixtures live in the standalone
   `stryker-cxx` repository.
 - package contents, signed-release policy, and dashboard upload policy are owned
@@ -124,8 +141,8 @@ Mutation options:
 - `--threshold-high`, `--threshold-low`, `--threshold-break`: Stryker-style
   threshold bands. Marmorkrebs' `--threshold` maps to `--threshold-break`.
 - `--retain-worktrees`, `--retain-worktrees-for`,
-  `--retained-worktree-ttl-hours`, `--worker-tmp-dir`, `--env KEY=VALUE`:
-  resource and debug controls for isolated mutation workers.
+  `--retained-worktree-ttl-hours`, `--worker-tmp-dir`, `--worker-label`,
+  `--env KEY=VALUE`: resource and debug controls for isolated mutation workers.
 - `--env-inherit`, `--env-block`: inherited process-environment allow/block
   controls for build/check/test commands and provider hooks.
 - Provider reports record env keys and redaction metadata, but explicit env
@@ -148,6 +165,7 @@ Execution options:
 - `--skip-initial-test`: skip the unmutated build/test lifecycle check.
 - `--timeout-factor <n>`: multiplier for dry-run-derived mutant timeouts.
 - `--timeout-constant-ms <n>`: constant milliseconds added to calibrated mutant timeouts.
+- `--equivalent-suppression <mode>`: native equivalent/noise suppression mode.
 - `--jobs <n>`: parallel mutant workers, introduced after isolated worktrees exist.
 - `--worktree-mode inplace|copy|git-worktree`: choose mutation isolation mode.
 - `--resume <report>`: skip completed mutants from a prior report.
@@ -298,21 +316,44 @@ own gate-result normalization.
 
 ## Mutator set
 
-Initial mutators should match the embedded engine:
+Current mutators include the default PR-gate set plus opt-in focused families:
 
 - `ConditionalBoundary`: `<`, `<=`, `>`, `>=` boundary changes.
 - `EqualityOperator`: `==` and `!=` swaps.
 - `LogicalOperator`: `&&` and `||` swaps.
 - `BooleanLiteral`: `true` and `false` swaps.
 - `ArithmeticOperator`: `+` `-` `*` `/` swaps, opt-in by default.
-
-Near-term additions:
-
+- `IntegerLiteral`: `0`/`1` swaps, opt-in by default.
+- `NullLiteral`: `nullptr` and `NULL` swaps, opt-in by default.
+- `CharacterLiteral`: character replacements, opt-in by default.
+- `FloatingPointLiteral`: floating-point literal replacements, opt-in by default.
+- `StringLiteral`: string literal replacements, opt-in by default.
 - `UnaryOperator`: remove or add `!` where syntactically safe.
-- `ReturnValue`: mutate simple boolean/integer return constants.
+- `ReturnValue`: mutate simple boolean return constants.
 - `AssignmentOperator`: selected `+=`, `-=`, `*=`, `/=` changes.
 - `BitwiseOperator`: `&`, `|`, `^` swaps where AST context proves they are operators.
-- `CallRemoval`: replace selected side-effect-free predicate/helper calls only when configured.
+- `ShiftOperator`: `<<`, `>>`, `<<=`, and `>>=` swaps.
+- `UpdateOperator`: `++` and `--` swaps.
+- `ConditionalBoundary`: Stryker-style `<`/`<=` and `>`/`>=` boundary changes.
+- `ConditionalExpression`: swap true/false ternary branches.
+- `CallRemoval`: replace statement-level calls with no-ops.
+- `StatementRemoval`: replace simple statements with no-op statements.
+- `BlockRemoval`: replace single-line compound statements with empty blocks.
+- `LoopBoundary`: mutate loop-header comparison boundaries.
+- `LoopCondition`: negate loop-header conditions.
+- `StandardLibraryCall`: mutate selected standard-library call targets,
+  including min/max, predicate aggregation, lower/upper-bound, and begin/end
+  variants, plus ordering, partitioning, and sortedness/heap predicate pairs.
+- `MemoryOrder`: mutate C++ atomic `std::memory_order_*` and
+  `std::memory_order::*` constants, with clang confirmation for enum-reference
+  cursor spans.
+- `MemberAccessOperator`: mutate pointer/value member-access operators.
+- `ExceptionHandling`: remove single-line throw statements.
+- `PreprocessorGuard`: mutate simple `#if 0`/`#if 1` and `#ifdef`/`#ifndef` guards.
+- `ObjCMessageSend`: remove simple statement-level Objective-C message sends.
+- `ObjCBoolLiteral`: mutate Objective-C `YES`/`NO` literals.
+- `MetalThreadPosition`: mutate selected Metal thread-position attributes.
+- `MetalAddressSpace`: mutate selected Metal address-space qualifiers.
 
 Default mutators should bias toward branch and dispatch logic, not broad arithmetic. Arithmetic creates too many equivalent or noisy mutants in pointer/indexing code.
 
@@ -338,6 +379,8 @@ Requirements:
 
 - Use compile commands from `compile_commands.json` when available.
 - Mutate AST-confirmed expressions rather than raw token matches.
+- Generate direct source-range mutants for selected AST nodes such as boolean
+  returns, ternary conditional expressions, statements, blocks, and literals.
 - Preserve formatting enough that diagnostics remain useful.
 - Avoid macro expansions unless explicitly enabled.
 - Record AST node kind in the mutant record.
@@ -413,7 +456,21 @@ Markdown report should include:
 - Summary table.
 - Score and threshold.
 - Initial dry-run status and calibrated timeout.
-- Threshold band status and per-file/per-mutator/per-status summaries.
+- Threshold band status and per-file/per-mutator/per-status summaries,
+  including CI-friendly Markdown mutator summary tables.
+- Native report schemas require `toolVersion`, `summary.byStatus`,
+  `summary.byFile`, and `summary.byMutator` so Marmorkrebs can consume
+  precomputed breakdowns instead of reconstructing them from every mutant
+  record.
+- Dashboard exports surface `thresholdStatus` directly so Marmorkrebs and PR
+  proof collectors do not need to reimplement threshold-band classification.
+- Dashboard exports surface privacy metadata so proof collectors can distinguish
+  source-file inclusion from short mutant source snippets and confirm that
+  secret/environment values are redacted.
+- Dashboard exports surface upload status metadata so proof collectors can tell
+  disabled, not-attempted, succeeded, and failed dashboard upload paths apart.
+- GitHub annotation severity mapping: survivors as warnings, no-coverage
+  mutants as notices, and build/check/timeout failures as errors.
 - Changed files targeted.
 - Survivor list with file/line/mutator/before/after.
 - Build errors and timeout list.
@@ -437,7 +494,7 @@ Adapter plan:
 
 Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
 `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, forwards dry-run,
-checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, and threshold-band options, treats
+checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, threshold-band, and equivalent-suppression options, treats
 failed `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser.
 
@@ -522,6 +579,8 @@ language-agnostic gate model.
 - ✅ Add `--mode clang` and `--mode clang-ast`.
 - ✅ Read `compile_commands.json` when available.
 - ✅ Generate AST-confirmed candidates for selected operators.
+- ✅ Generate direct source-range candidates for selected AST nodes including
+  ternary conditional-expression branch swaps.
 - ✅ Add `--coverage-helper` + test-level coverage selection coverage.
 
 ### M4: CI and ecosystem parity
@@ -530,14 +589,19 @@ language-agnostic gate model.
 - ✅ Add GitHub release/provenance workflow and validation scripts.
 - ✅ Add SARIF and GitHub annotation output.
 - ✅ Add threshold band policy and CI-facing validation.
-- ✅ Add equivalent-noise handling via ignore comments.
+- ✅ Add equivalent-noise handling via ignore comments and conservative native
+  equivalent/noise suppression.
 
 ### M5: remaining
 
-- Tighten mutation catalog breadth and noise filtering.
-- Add richer source-language-specific AST generators for wider C++/ObjC++/Metal domains.
-- Expand cross-tool workflow parity and hosted dashboard integrations.
-- Add deeper equivalent-mutant/logic reduction logic.
+- Tighten deeper mutation catalog breadth and noise filtering inside the implemented focused families.
+- Add richer source-language-specific AST generators for wider C++/ObjC++/Metal
+  domains beyond the current selected Objective-C message-send/BOOL and Metal
+  thread-position/address-space cases.
+- Expand cross-tool workflow parity and hosted dashboard integrations beyond
+  current standalone Xcode/Marmorkrebs forwarding and CI dashboard provenance.
+- Add deeper equivalent-mutant/logic reduction beyond the conservative native
+  suppression rules.
 
 These are explicit follow-on parity items for the broader Stryker ecosystem and
 do not block production PR-gate flows that use `marmorkrebs --tool stryker-cxx`.

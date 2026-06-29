@@ -36,10 +36,16 @@ Options:
   --test-command <cmd>      Custom test command (default: tool-specific)
   --build-command <cmd>     Build command run between mutants (required for stryker-cxx)
   --check-command <cmd>     stryker-cxx only: compile/type-check command run before tests
-  --build-system <name>     stryker-cxx only: cmake | ctest | ninja | make | meson | bazel
+  --build-system <name>     stryker-cxx only: cmake | ctest | ninja | make | meson | bazel | xcodebuild
   --build-dir <path>        stryker-cxx only: adapter build directory
   --build-target <target>   stryker-cxx only: adapter build target
-  --check-system <name>     stryker-cxx only: clang-tidy | cppcheck
+  --xcode-workspace <path>  stryker-cxx only: xcodebuild workspace
+  --xcode-project <path>    stryker-cxx only: xcodebuild project
+  --xcode-scheme <name>     stryker-cxx only: xcodebuild scheme
+  --xcode-configuration <c> stryker-cxx only: xcodebuild configuration
+  --xcode-sdk <sdk>         stryker-cxx only: xcodebuild SDK
+  --xcode-destination <d>   stryker-cxx only: xcodebuild destination
+  --check-system <name>     stryker-cxx only: clang | clang++ | clang-tidy | cppcheck
   --check-args <args>       stryker-cxx only: adapter checker arguments
   --test-target <target>    stryker-cxx only: adapter test target
   --test-filter <pattern>   stryker-cxx only: adapter test filter
@@ -83,6 +89,7 @@ Options:
   --retained-worktree-ttl-hours <n>
                             stryker-cxx only: remove old retained worktrees under worker tmp
   --worker-tmp-dir <path>   stryker-cxx only: parent directory for worker worktrees
+  --worker-label <label>    stryker-cxx only: label retained worker/worktree artifacts
   --env <KEY=VALUE,...>     stryker-cxx only: explicit env injected into build/check/test
   --env-inherit <KEY,...>   stryker-cxx only: inherited env allowlist for build/check/test
   --env-block <KEY,...>     stryker-cxx only: inherited env denylist for build/check/test
@@ -90,6 +97,8 @@ Options:
   --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
   --mutators <names>        stryker-cxx only: comma-separated mutator names
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
+  --equivalent-suppression <mode>
+                            stryker-cxx only: off | conservative | aggressive
   --plugin <path>           stryker-cxx only: plugin manifest path, repeatable via comma
   --plugin-dir <path>       stryker-cxx only: directory containing stryker-cxx-plugin.json
   --reporter <name>         stryker-cxx only: requested reporter, repeatable via comma
@@ -99,6 +108,10 @@ Options:
   --dashboard-version <v>   stryker-cxx only: dashboard payload version metadata
   --dashboard-retention-days <n>
                             stryker-cxx only: dashboard retention policy metadata
+  --dashboard-project <id>  stryker-cxx only: dashboard project/repository id
+  --dashboard-branch <name> stryker-cxx only: dashboard branch name
+  --dashboard-commit <sha>  stryker-cxx only: dashboard commit sha
+  --dashboard-build-url <u> stryker-cxx only: dashboard CI/build URL
   --dashboard-auth-token-env <KEY>
                             stryker-cxx only: env var used for upload bearer auth
   --dashboard-auth-header <name>
@@ -141,6 +154,12 @@ function parseCliArgs(argv: string[]): {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  xcodeWorkspace?: string;
+  xcodeProject?: string;
+  xcodeScheme?: string;
+  xcodeConfiguration?: string;
+  xcodeSdk?: string;
+  xcodeDestination?: string;
   checkSystem?: string;
   checkArgs?: string;
   testTarget?: string;
@@ -180,12 +199,14 @@ function parseCliArgs(argv: string[]): {
   retainWorktreesFor?: string[];
   retainedWorktreeTtlHours?: number;
   workerTmpDir?: string;
+  workerLabel?: string;
   env?: string[];
   envInherit?: string[];
   envBlock?: string[];
   includeMetal?: boolean;
   mutators?: string;
   mode?: string;
+  equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
   reporters?: string[];
@@ -193,6 +214,10 @@ function parseCliArgs(argv: string[]): {
   dashboardUploadUrl?: string;
   dashboardVersion?: string;
   dashboardRetentionDays?: number;
+  dashboardProject?: string;
+  dashboardBranch?: string;
+  dashboardCommit?: string;
+  dashboardBuildUrl?: string;
   dashboardAuthTokenEnv?: string;
   dashboardAuthHeader?: string;
   strykerCxxBinary?: string;
@@ -246,6 +271,12 @@ function parseCliArgs(argv: string[]): {
   if (args["build-system"]) result.buildSystem = args["build-system"];
   if (args["build-dir"]) result.buildDir = args["build-dir"];
   if (args["build-target"]) result.buildTarget = args["build-target"];
+  if (args["xcode-workspace"]) result.xcodeWorkspace = args["xcode-workspace"];
+  if (args["xcode-project"]) result.xcodeProject = args["xcode-project"];
+  if (args["xcode-scheme"]) result.xcodeScheme = args["xcode-scheme"];
+  if (args["xcode-configuration"]) result.xcodeConfiguration = args["xcode-configuration"];
+  if (args["xcode-sdk"]) result.xcodeSdk = args["xcode-sdk"];
+  if (args["xcode-destination"]) result.xcodeDestination = args["xcode-destination"];
   if (args["check-system"]) result.checkSystem = args["check-system"];
   if (args["check-args"]) result.checkArgs = args["check-args"];
   if (args["test-target"]) result.testTarget = args["test-target"];
@@ -304,6 +335,7 @@ function parseCliArgs(argv: string[]): {
     result.retainedWorktreeTtlHours = parseFloat(args["retained-worktree-ttl-hours"]);
   }
   if (args["worker-tmp-dir"]) result.workerTmpDir = args["worker-tmp-dir"];
+  if (args["worker-label"]) result.workerLabel = args["worker-label"];
   const env = splitCommaList(args.env);
   if (env) result.env = env;
   const envInherit = splitCommaList(args["env-inherit"]);
@@ -314,6 +346,9 @@ function parseCliArgs(argv: string[]): {
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
   if (args.mode) result.mode = args.mode;
+  if (args["equivalent-suppression"]) {
+    result.equivalentSuppression = args["equivalent-suppression"];
+  }
   const plugins = splitCommaList(args.plugin);
   if (plugins) result.plugins = plugins;
   const pluginDirs = splitCommaList(args["plugin-dir"]);
@@ -326,6 +361,10 @@ function parseCliArgs(argv: string[]): {
   if (args["dashboard-retention-days"]) {
     result.dashboardRetentionDays = parseInt(args["dashboard-retention-days"], 10);
   }
+  if (args["dashboard-project"]) result.dashboardProject = args["dashboard-project"];
+  if (args["dashboard-branch"]) result.dashboardBranch = args["dashboard-branch"];
+  if (args["dashboard-commit"]) result.dashboardCommit = args["dashboard-commit"];
+  if (args["dashboard-build-url"]) result.dashboardBuildUrl = args["dashboard-build-url"];
   if (args["dashboard-auth-token-env"]) {
     result.dashboardAuthTokenEnv = args["dashboard-auth-token-env"];
   }
@@ -418,6 +457,12 @@ function main(): void {
     buildSystem: opts.buildSystem,
     buildDir: opts.buildDir,
     buildTarget: opts.buildTarget,
+    xcodeWorkspace: opts.xcodeWorkspace,
+    xcodeProject: opts.xcodeProject,
+    xcodeScheme: opts.xcodeScheme,
+    xcodeConfiguration: opts.xcodeConfiguration,
+    xcodeSdk: opts.xcodeSdk,
+    xcodeDestination: opts.xcodeDestination,
     checkSystem: opts.checkSystem,
     checkArgs: opts.checkArgs,
     testTarget: opts.testTarget,
@@ -446,14 +491,26 @@ function main(): void {
     coverageHelperTests: opts.coverageHelperTests,
     incremental: opts.incremental,
     baselineFile: opts.baselineFile,
+    baselineMaxAgeDays: opts.baselineMaxAgeDays,
+    baselineBranch: opts.baselineBranch,
     writeBaseline: opts.writeBaseline,
     clearBaseline: opts.clearBaseline,
     batchMutants: opts.batchMutants,
     batchSize: opts.batchSize,
+    worktreeMode: opts.worktreeMode,
+    retainWorktrees: opts.retainWorktrees,
+    retainWorktreesFor: opts.retainWorktreesFor,
+    retainedWorktreeTtlHours: opts.retainedWorktreeTtlHours,
+    workerTmpDir: opts.workerTmpDir,
+    workerLabel: opts.workerLabel,
+    env: opts.env,
+    envInherit: opts.envInherit,
+    envBlock: opts.envBlock,
     maxMutants: opts.maxMutants,
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
     mode: opts.mode,
+    equivalentSuppression: opts.equivalentSuppression,
     plugins: opts.plugins,
     pluginDirs: opts.pluginDirs,
     reporters: opts.reporters,
@@ -461,6 +518,10 @@ function main(): void {
     dashboardUploadUrl: opts.dashboardUploadUrl,
     dashboardVersion: opts.dashboardVersion,
     dashboardRetentionDays: opts.dashboardRetentionDays,
+    dashboardProject: opts.dashboardProject,
+    dashboardBranch: opts.dashboardBranch,
+    dashboardCommit: opts.dashboardCommit,
+    dashboardBuildUrl: opts.dashboardBuildUrl,
     dashboardAuthTokenEnv: opts.dashboardAuthTokenEnv,
     dashboardAuthHeader: opts.dashboardAuthHeader,
     strykerCxxBinary: opts.strykerCxxBinary,

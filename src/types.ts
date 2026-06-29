@@ -35,6 +35,12 @@ export interface MutationConfig {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  xcodeWorkspace?: string;
+  xcodeProject?: string;
+  xcodeScheme?: string;
+  xcodeConfiguration?: string;
+  xcodeSdk?: string;
+  xcodeDestination?: string;
   checkSystem?: string;
   checkArgs?: string;
   testTarget?: string;
@@ -74,6 +80,7 @@ export interface MutationConfig {
   retainWorktreesFor?: string[];
   retainedWorktreeTtlHours?: number;
   workerTmpDir?: string;
+  workerLabel?: string;
   env?: string[];
   envInherit?: string[];
   envBlock?: string[];
@@ -81,6 +88,7 @@ export interface MutationConfig {
   includeMetal?: boolean;
   mutators?: string;
   mode?: string;
+  equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
   reporters?: string[];
@@ -88,6 +96,10 @@ export interface MutationConfig {
   dashboardUploadUrl?: string;
   dashboardVersion?: string;
   dashboardRetentionDays?: number;
+  dashboardProject?: string;
+  dashboardBranch?: string;
+  dashboardCommit?: string;
+  dashboardBuildUrl?: string;
   dashboardAuthTokenEnv?: string;
   dashboardAuthHeader?: string;
   strykerCxxBinary?: string;

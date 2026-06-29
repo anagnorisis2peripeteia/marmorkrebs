@@ -54,20 +54,22 @@ Key options:
 - `--skip-tests` — run `stryker-cxx` build/check phases only and mark viable mutants as survivors
 - `--coverage-file <path>` / `--coverage-provider <id>` / `--coverage-test-command-template <cmd>` / `--coverage-helper-command-template <cmd>` / `--coverage-helper-tests <tests>` — forward coverage data so `stryker-cxx` can mark uncovered mutants as `NO_COVERAGE`; when coverage includes covering tests or helper-generated per-test coverage, select per-mutant test commands
 - `--incremental`, `--baseline-file <path>`, `--baseline-max-age-days <n>`, `--baseline-branch <name>`, `--write-baseline <path>`, `--clear-baseline` — forward baseline-cache and reuse-policy controls to `stryker-cxx`
-- `--batch-mutants`, `--batch-size <n>`, `--worktree-mode <inplace|copy|git-worktree>` — forward opt-in isolated-worktree batching controls to `stryker-cxx`
+- `--batch-mutants`, `--batch-size <n>`, `--worktree-mode <inplace|copy|git-worktree>` — forward opt-in isolated-worktree batching controls to `stryker-cxx`; batching uses conservative proximity/source-structure heuristics
 - `--retain-worktrees`, `--retain-worktrees-for <statuses>`,
   `--retained-worktree-ttl-hours <n>`, `--worker-tmp-dir <path>`,
+  `--worker-label <label>`,
   `--env <KEY=VALUE,...>`, `--env-inherit <KEY,...>`,
   `--env-block <KEY,...>`, `--dashboard-version <v>`,
   `--dashboard-retention-days <n>`, `--dashboard-auth-token-env <KEY>`,
   `--dashboard-auth-header <name>` — forward debug worktree retention,
-  per-status retention policy, retained-worker cleanup TTL, worker temp-root,
+  per-status retention policy, retained-worker cleanup TTL, worker temp-root and
+  worker label,
   explicit env injection, inherited-env allow/block controls, and dashboard
   policy metadata to `stryker-cxx`; provider reports keep env keys and
   redaction metadata, not explicit env values, and Marmorkrebs preserves
   `resourceIsolation` evidence metadata in the normalized result; use `copy` or
   `git-worktree` mode when retaining workers
-- `--build-system <cmake|ctest|ninja|make|meson|bazel>` plus `--build-dir`, `--build-target`, `--check-system <clang-tidy|cppcheck>`, `--check-args <args>`, `--test-target`, `--test-filter` — let `stryker-cxx` synthesize common build/check/test commands
+- `--build-system <cmake|ctest|ninja|make|meson|bazel|xcodebuild>` plus `--build-dir`, `--build-target`, `--xcode-workspace`, `--xcode-project`, `--xcode-scheme`, `--xcode-configuration`, `--xcode-sdk`, `--xcode-destination`, `--check-system <clang|clang++|clang-tidy|cppcheck>`, `--check-args <args>`, `--test-target`, `--test-filter` — let `stryker-cxx` synthesize common build/check/test commands
 - `--test-framework <gtest|catch2|doctest|xctest>`, `--test-binary`,
   `--xctest-bundle`, `--xctest-destination`,
   `--xctest-only-testing`, `--xctest-skip-testing` — let `stryker-cxx`
@@ -76,7 +78,9 @@ Key options:
   discoverable, and XCTest destination/only/skip controls use the
   `xcodebuild test-without-building` path
 - `--plugin`, `--plugin-dir`, `--reporter` — forward local plugin manifests, provider hooks, and reporter selection to `stryker-cxx`
-- `--dashboard-export`, `--dashboard-upload-url` — forward dashboard export/upload controls to `stryker-cxx`
+- `--dashboard-export`, `--dashboard-upload-url`, `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`, `--dashboard-build-url` — forward dashboard export/upload and CI provenance controls to `stryker-cxx`
+- `--equivalent-suppression <off|conservative|aggressive>` — forward native
+  equivalent/noise suppression mode; use `off` for raw proof runs
 - `--stryker-cxx-bin <path>` — use a specific `stryker-cxx` binary
 - `--threshold <0-1>` — compatibility alias for the `stryker-cxx` break threshold
 - `--threshold-high <0-1>`, `--threshold-low <0-1>`, `--threshold-break <0-1>` — forward Stryker-style score bands to `stryker-cxx`
@@ -107,6 +111,8 @@ Node >= 20. `test-fixtures/` holds real captured outputs from each mutation tool
 The `validate:stryker-cxx-provider` target runs the normal Marmorkrebs checks and
 smokes the standalone `stryker-cxx` provider when `stryker-cxx` is available on
 `PATH` or `STRYKER_CXX_BIN` points at a local checkout/binary.
+Security reporting for provider credentials, crabbox/local proof paths, and
+artifact upload behavior is documented in [`SECURITY.md`](SECURITY.md).
 
 ## Example: focused Stryker on a PR
 

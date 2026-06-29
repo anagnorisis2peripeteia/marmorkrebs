@@ -158,6 +158,24 @@ function buildExternalCxxSourceCommand(
   if (config.buildTarget) {
     parts.push("--build-target", `'${shellEscape(config.buildTarget)}'`);
   }
+  if (config.xcodeWorkspace) {
+    parts.push("--xcode-workspace", `'${shellEscape(config.xcodeWorkspace)}'`);
+  }
+  if (config.xcodeProject) {
+    parts.push("--xcode-project", `'${shellEscape(config.xcodeProject)}'`);
+  }
+  if (config.xcodeScheme) {
+    parts.push("--xcode-scheme", `'${shellEscape(config.xcodeScheme)}'`);
+  }
+  if (config.xcodeConfiguration) {
+    parts.push("--xcode-configuration", `'${shellEscape(config.xcodeConfiguration)}'`);
+  }
+  if (config.xcodeSdk) {
+    parts.push("--xcode-sdk", `'${shellEscape(config.xcodeSdk)}'`);
+  }
+  if (config.xcodeDestination) {
+    parts.push("--xcode-destination", `'${shellEscape(config.xcodeDestination)}'`);
+  }
   if (config.checkSystem) {
     parts.push("--check-system", `'${shellEscape(config.checkSystem)}'`);
   }
@@ -194,6 +212,9 @@ function buildExternalCxxSourceCommand(
   if (config.mode) {
     parts.push("--mode", `'${shellEscape(config.mode)}'`);
   }
+  if (config.equivalentSuppression) {
+    parts.push("--equivalent-suppression", `'${shellEscape(config.equivalentSuppression)}'`);
+  }
   if (config.base) {
     parts.push("--base", `'${shellEscape(config.base)}'`);
   }
@@ -226,6 +247,18 @@ function buildExternalCxxSourceCommand(
   }
   if (config.dashboardRetentionDays !== undefined) {
     parts.push("--dashboard-retention-days", String(config.dashboardRetentionDays));
+  }
+  if (config.dashboardProject) {
+    parts.push("--dashboard-project", `'${shellEscape(config.dashboardProject)}'`);
+  }
+  if (config.dashboardBranch) {
+    parts.push("--dashboard-branch", `'${shellEscape(config.dashboardBranch)}'`);
+  }
+  if (config.dashboardCommit) {
+    parts.push("--dashboard-commit", `'${shellEscape(config.dashboardCommit)}'`);
+  }
+  if (config.dashboardBuildUrl) {
+    parts.push("--dashboard-build-url", `'${shellEscape(config.dashboardBuildUrl)}'`);
   }
   if (config.dashboardAuthTokenEnv) {
     parts.push(
@@ -323,6 +356,9 @@ function buildExternalCxxSourceCommand(
   }
   if (config.workerTmpDir) {
     parts.push("--worker-tmp-dir", `'${shellEscape(config.workerTmpDir)}'`);
+  }
+  if (config.workerLabel) {
+    parts.push("--worker-label", `'${shellEscape(config.workerLabel)}'`);
   }
   for (const item of config.env ?? []) {
     parts.push("--env", `'${shellEscape(item)}'`);

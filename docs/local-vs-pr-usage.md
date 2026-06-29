@@ -88,6 +88,9 @@ Optional controls:
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.
+- `--equivalent-suppression <off|conservative|aggressive>` forwards native
+  equivalent/noise suppression; use `off` when proof requires every discovered
+  mutant to execute.
 - `--check-command <cmd>` runs an additional compile/type-check phase before tests.
 - `--skip-tests` runs build/check only and treats viable mutants as survivors.
 - `--coverage-file <path>` supplies simple JSON, `llvm-cov export` JSON, or LCOV data so uncovered mutants are reported as `NO_COVERAGE`; with JSON `coveredTests`/`testsByLine` data or helper-generated per-test coverage from `--coverage-helper-command-template <cmd>` plus `--coverage-helper-tests <tests>`, `--coverage-test-command-template <cmd>` can select per-mutant test commands via `{tests}`, `{tests_csv}`, `{tests_space}`, or `{first_test}`.
