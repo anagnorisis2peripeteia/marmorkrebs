@@ -27,6 +27,7 @@ untested dispatch branch ship a bug.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -69,6 +70,7 @@ class Mutant:
     col: int
     original: str
     mutated: str
+    id: str = ""
     status: str = "PENDING"  # KILLED | SURVIVED | BUILD_ERROR | PENDING
     detail: str = ""
 
@@ -85,7 +87,11 @@ class Report:
     @property
     def score(self) -> float:
         scored = self.killed + self.survived
-        return 100.0 * self.killed / scored if scored else 100.0
+        return self.killed / scored if scored else 1.0
+
+    @property
+    def score_percent(self) -> float:
+        return 100.0 * self.score
 
 
 def _strip_noncode(line: str) -> str:
@@ -141,9 +147,16 @@ def discover(repo: str, path: str, only: set[int] | None,
         for mutator in enabled:
             for orig, new in MUTATORS[mutator]:
                 for m in re.finditer(_TOKEN[orig], code):
-                    muts.append(Mutant(mutator, path, i, m.start(),
-                                       orig, new))
+                    mut = Mutant(mutator, path, i, m.start(), orig, new)
+                    mut.id = stable_id(mut)
+                    muts.append(mut)
     return muts
+
+
+def stable_id(mut: Mutant) -> str:
+    raw = f"{mut.file}:{mut.line}:{mut.col}:{mut.mutator}:{mut.original}:{mut.mutated}"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"{mut.file}:{mut.line}:{mut.col}:{mut.mutator}:{digest}"
 
 
 def apply_mutant(repo: str, mut: Mutant) -> str:
@@ -191,6 +204,15 @@ def main() -> int:
     ap.add_argument("--include-metal", action="store_true")
     ap.add_argument("--mutators", default=",".join(DEFAULT_MUTATORS),
                     help=f"comma-separated; available: {','.join(MUTATORS)}")
+    ap.add_argument(
+        "--output-format",
+        default="legacy",
+        choices=["legacy", "stryker-cxx"],
+        help=(
+            "legacy keeps current embedded report schema; "
+            "stryker-cxx emits mutation-testing-compatible wrapper"
+        ),
+    )
     args = ap.parse_args()
 
     enabled = [m.strip() for m in args.mutators.split(",") if m.strip()]
@@ -240,12 +262,24 @@ def main() -> int:
             restore(repo, mut.file, mut.line, original)
             rep.mutants.append(asdict(mut))
             print(f"{mut.status} ({time.time()-t0:.0f}s)")
-            _write_report(args.report, rep)
+            _write_report(
+                args.report,
+                rep,
+                repo=repo,
+                base=args.diff_base,
+                output_mode=args.output_format,
+            )
     finally:
         for path in files:
             subprocess.run(["git", "-C", repo, "checkout", "--", path])
-    _write_report(args.report, rep)
-    print(f"\n[marmorkrebs-cxx] score {rep.score:.1f}%  "
+    _write_report(
+        args.report,
+        rep,
+        repo=repo,
+        base=args.diff_base,
+        output_mode=args.output_format,
+    )
+    print(f"\n[marmorkrebs-cxx] score {rep.score_percent:.1f}%  "
           f"killed={rep.killed} survived={rep.survived} build_error={rep.build_error}")
     for m in rep.mutants:
         if m["status"] == "SURVIVED":
@@ -254,9 +288,100 @@ def main() -> int:
     return 1 if rep.survived else 0
 
 
-def _write_report(path: str, rep: Report) -> None:
+def _write_report(
+    path: str,
+    rep: Report,
+    repo: str | None = None,
+    base: str | None = None,
+    output_mode: str = "legacy",
+) -> None:
     with open(path, "w") as f:
-        json.dump({**asdict(rep), "score": rep.score}, f, indent=2)
+        if output_mode == "stryker-cxx":
+            json.dump(_report_dict(rep, repo=repo, base=base), f, indent=2)
+        else:
+            json.dump(_legacy_report(rep), f, indent=2)
+
+
+def _legacy_report(rep: Report) -> dict:
+    return {
+        "target_files": rep.target_files,
+        "total": rep.total,
+        "killed": rep.killed,
+        "survived": rep.survived,
+        "build_error": rep.build_error,
+        "mutants": rep.mutants,
+        "score": rep.score_percent,
+    }
+
+
+def _report_dict(rep: Report, repo: str | None = None,
+                 base: str | None = None) -> dict:
+    """Return a standalone stryker-cxx report while preserving legacy fields."""
+    mutants = rep.mutants
+    return {
+        "schemaVersion": "stryker-cxx.report.v1",
+        "tool": "stryker-cxx",
+        "repo": repo,
+        "base": base,
+        "targetFiles": rep.target_files,
+        "totalMutants": rep.total,
+        "killed": rep.killed,
+        "survived": rep.survived,
+        "buildErrors": rep.build_error,
+        "timeouts": 0,
+        "score": rep.score,
+        "mutants": mutants,
+        # Legacy Marmorkrebs embedded-engine fields. Keep these until
+        # Marmorkrebs requires only stryker-cxx.report.v1.
+        "target_files": rep.target_files,
+        "total": rep.total,
+        "build_error": rep.build_error,
+        "scorePercent": rep.score_percent,
+        "mutationTestingElements": _mutation_testing_elements(rep, repo),
+    }
+
+
+def _mutation_testing_elements(rep: Report, repo: str | None) -> dict:
+    """Best-effort Stryker mutation-testing-elements report projection."""
+    files: dict[str, dict] = {}
+    for file in rep.target_files:
+        source = ""
+        if repo:
+            try:
+                with open(os.path.join(repo, file)) as f:
+                    source = f.read()
+            except OSError:
+                source = ""
+        files[file] = {"source": source, "mutants": []}
+
+    for idx, mut in enumerate(rep.mutants):
+        file = mut["file"]
+        files.setdefault(file, {"source": "", "mutants": []})
+        files[file]["mutants"].append({
+            "id": mut.get("id") or str(idx),
+            "mutatorName": mut["mutator"],
+            "replacement": mut["mutated"],
+            "status": _mte_status(mut["status"]),
+            "statusReason": mut.get("detail", ""),
+            "location": {
+                "start": {"line": mut["line"], "column": mut["col"]},
+                "end": {"line": mut["line"], "column": mut["col"] + len(mut["original"])},
+            },
+        })
+    return {
+        "schemaVersion": "2.0",
+        "files": files,
+        "testFiles": {},
+    }
+
+
+def _mte_status(status: str) -> str:
+    return {
+        "KILLED": "Killed",
+        "SURVIVED": "Survived",
+        "BUILD_ERROR": "NoCoverage",
+        "PENDING": "Pending",
+    }.get(status, "RuntimeError")
 
 
 if __name__ == "__main__":

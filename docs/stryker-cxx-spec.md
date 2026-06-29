@@ -1,16 +1,16 @@
-# cxx-mutant standalone tool spec
+# stryker-cxx standalone tool spec
 
 ## Purpose
 
-`cxx-mutant` is a standalone source-level mutation tester for C, C++, Objective-C++, and optionally Metal shader sources.
+`stryker-cxx` is a standalone source-level mutation tester for C, C++, Objective-C++, and optionally Metal shader sources.
 
-It should graduate the current Marmorkrebs embedded `cxx-source` engine into an independent tool with a stable CLI, reports, configuration, and release story. Marmorkrebs should then treat it like other mutation tools: an external engine with a parser/adapter, not a private implementation detail.
+It owns the C++ mutation engine as an independent tool with a stable CLI, reports, configuration, and release story. Marmorkrebs treats it like other mutation tools: an external engine with a parser/adapter, not a private implementation detail.
 
 The tool is intended for PR-sized mutation gates where the caller supplies the build and test commands. It recompiles per mutant, which makes it suitable for projects that do not expose a single self-contained test binary and where LLVM-bitcode mutation tools are awkward to integrate.
 
 ## Non-goals
 
-`cxx-mutant` is not trying to replace full compiler-integrated mutation systems on day one.
+`stryker-cxx` is not trying to replace full compiler-integrated mutation systems on day one.
 
 Initial non-goals:
 
@@ -44,7 +44,7 @@ The first release should expose a small stable command surface.
 Run mutation testing and emit a report.
 
 ```bash
-cxx-mutant run \
+stryker-cxx run \
   --repo . \
   --files src/foo.cpp,src/bar.mm \
   --base origin/main \
@@ -92,7 +92,7 @@ Report options:
 Discover mutants without running build/test commands.
 
 ```bash
-cxx-mutant list-mutants \
+stryker-cxx list-mutants \
   --repo . \
   --files src/foo.cpp \
   --base origin/main \
@@ -106,7 +106,7 @@ This supports fast review of mutation scope and stable mutant IDs before a long 
 Run one mutant by stable ID.
 
 ```bash
-cxx-mutant run-mutant \
+stryker-cxx run-mutant \
   --repo . \
   --id src/foo.cpp:42:17:EqualityOperator:sha256... \
   --build-command "ninja -C build target" \
@@ -130,10 +130,20 @@ Marmorkrebs can map these into its existing gate semantics.
 
 The JSON report should be stable and versioned.
 
+The embedded Marmorkrebs engine now uses this as the compatibility direction:
+emit a `stryker-cxx.report.v1` wrapper while preserving legacy Marmorkrebs fields
+until the standalone tool exists. That lets Marmorkrebs consume old reports and
+new standalone-style reports through the same adapter.
+
+Default behavior for the embedded engine remains legacy-only for backward compatibility.
+The new `stryker-cxx` projection is explicit via `--output-format stryker-cxx`.
+Marmorkrebs keeps that contract stable by leaving old report consumers untouched
+unless the optional format switch is selected.
+
 ```json
 {
-  "schemaVersion": "cxx-mutant.report.v1",
-  "tool": "cxx-mutant",
+  "schemaVersion": "stryker-cxx.report.v1",
+  "tool": "stryker-cxx",
   "repo": "/path/to/repo",
   "base": "origin/main",
   "startedAt": "2026-06-28T12:00:00Z",
@@ -156,8 +166,8 @@ The JSON report should be stable and versioned.
       "mutated": "!=",
       "status": "SURVIVED",
       "durationMs": 1200,
-      "buildLog": "agent_space/cxx-mutant/build_1.log",
-      "testLog": "agent_space/cxx-mutant/test_1.log",
+      "buildLog": "agent_space/stryker-cxx/build_1.log",
+      "testLog": "agent_space/stryker-cxx/test_1.log",
       "detail": "all targeted tests passed"
     }
   ]
@@ -170,6 +180,28 @@ Required compatibility notes:
 - The Marmorkrebs adapter can normalize older embedded reports that use percentages.
 - `totalMutants: 0` should be explicit so callers can distinguish vacuous proof from strong evidence.
 - Build errors should not silently improve the score; they should be counted separately.
+
+## Stryker compatibility seam
+
+`stryker-cxx` should integrate with the Stryker ecosystem through
+`mutation-testing-elements`, not by depending on StrykerJS or Stryker.NET
+internals.
+
+The first compatibility layer should be report-level:
+
+- Keep Stryker-style mutator names where the concepts match.
+- Emit stable mutant IDs.
+- Emit Stryker-style statuses in a report projection: `Killed`, `Survived`,
+  `NoCoverage`, `Timeout`, `Pending`, and infrastructure error statuses where needed.
+- Preserve source locations as start/end line and column ranges.
+- Include source text per file when generating the report projection.
+- Keep the native `stryker-cxx.report.v1` schema as the authoritative contract,
+  then project into `mutation-testing-elements` for Stryker viewers and future
+  upstream discussion.
+
+This keeps the tool Stryker-shaped from the start: the C++ engine speaks the
+reporting vocabulary used by Stryker tooling, while Marmorkrebs performs only its
+own gate-result normalization.
 
 ## Mutator set
 
@@ -243,10 +275,10 @@ Safety rules:
 
 ## Configuration file
 
-Support `cxx-mutant.yml` at the repo root.
+Support `stryker-cxx.yml` at the repo root.
 
 ```yaml
-schemaVersion: cxx-mutant.config.v1
+schemaVersion: stryker-cxx.config.v1
 base: origin/main
 files:
   include:
@@ -269,7 +301,7 @@ execution:
 report:
   threshold: 0.6
   failOnEmpty: false
-  artifactDir: agent_space/cxx-mutant
+  artifactDir: agent_space/stryker-cxx
 ```
 
 CLI flags should override config values.
@@ -294,15 +326,18 @@ SARIF can come later for GitHub code-scanning integration.
 
 ## Marmorkrebs integration
 
-Marmorkrebs should remain the language-agnostic orchestrator. `cxx-mutant` should become the C/C++ provider.
+Marmorkrebs should remain the language-agnostic orchestrator. `stryker-cxx` should become the C/C++ provider.
 
 Adapter plan:
 
-1. Add a Marmorkrebs config option or discovery path for external `cxx-mutant`.
-2. If installed, run `cxx-mutant run` and parse `cxx-mutant.report.v1`.
-3. If not installed, fall back to the bundled embedded engine for compatibility.
-4. Preserve current Marmorkrebs CLI flags: `--max-mutants`, `--include-metal`, and `--mutators`.
-5. Eventually remove the bundled fallback once the standalone tool is stable and packaged.
+1. Run `stryker-cxx run` for `marmorkrebs --tool stryker-cxx`.
+2. Parse `stryker-cxx.report.v1`.
+3. Preserve current Marmorkrebs CLI flags: `--max-mutants`, `--include-metal`, and `--mutators`.
+4. Keep `cxx-source` as a legacy embedded fallback until old local scripts move over.
+
+Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
+`--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, and accepts
+`stryker-cxx.report.v1` through the C++ parser.
 
 Marmorkrebs result mapping:
 
@@ -317,7 +352,7 @@ Marmorkrebs result mapping:
 ## First repository layout
 
 ```text
-cxx-mutant/
+stryker-cxx/
   README.md
   LICENSE
   pyproject.toml
@@ -403,8 +438,8 @@ The standalone tool is ready to be treated as independent when:
 
 ## Open decisions
 
-- Repository name: `cxx-mutant`, `marmorkrebs-cxx`, or `claw-mutant-cxx`.
 - Initial license.
+- Whether this should become a true Stryker plugin package as well as the standalone CLI.
 - Whether Metal support remains token-only or gets its own shader-aware mode.
-- Whether thresholding belongs in `cxx-mutant`, Marmorkrebs, or both.
+- Whether thresholding belongs in `stryker-cxx`, Marmorkrebs, or both.
 - Whether clang-aware mode should be Python/libclang or a compiled helper binary.

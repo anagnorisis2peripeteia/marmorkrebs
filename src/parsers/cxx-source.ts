@@ -1,14 +1,20 @@
 import { fileURLToPath } from "node:url";
-import { EMPTY_RESULT, type MutationConfig, type MutationResult, type SurvivingMutant } from "../types.js";
+import {
+  EMPTY_RESULT,
+  type MutationConfig,
+  type MutationResult,
+  type MutationTool,
+  type SurvivingMutant,
+} from "../types.js";
 
 /**
- * marmorkrebs' built-in C++/ObjC++ source-mutation engine. Unlike the other
- * tools (external CLIs), this one ships in-repo at engines/cxx-source and is
- * driven per mutant: it recompiles the project and re-runs a targeted test
- * command for each mutation, classifying KILLED / SURVIVED / BUILD_ERROR.
+ * Marmorkrebs' C++/ObjC++ source mutation path. The preferred implementation is
+ * the external stryker-cxx CLI; the embedded cxx-source engine remains as a
+ * legacy fallback for old local flows.
  */
 
 interface CxxMutant {
+  id?: string;
   mutator: string;
   file: string;
   line: number;
@@ -20,13 +26,20 @@ interface CxxMutant {
 }
 
 interface CxxReport {
-  target_files: string[];
-  total: number;
+  schemaVersion?: string;
+  tool?: string;
+  target_files?: string[];
+  targetFiles?: string[];
+  total?: number;
+  totalMutants?: number;
   killed: number;
   survived: number;
-  build_error: number;
+  build_error?: number;
+  buildErrors?: number;
+  timeouts?: number;
   mutants: CxxMutant[];
   score: number;
+  scorePercent?: number;
 }
 
 function enginePath(): string {
@@ -39,7 +52,11 @@ export function buildCxxSourceCommand(
   config: MutationConfig,
 ): string {
   if (!config.buildCommand || !config.testCommand) {
-    throw new Error("cxx-source requires --build-command and --test-command");
+    throw new Error("stryker-cxx requires --build-command and --test-command");
+  }
+
+  if (config.tool === "stryker-cxx" || config.strykerCxxBinary) {
+    return buildExternalCxxSourceCommand(sourceFiles, workDir, config);
   }
 
   const engine = enginePath();
@@ -73,27 +90,80 @@ export function buildCxxSourceCommand(
   return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; cat "$report"`;
 }
 
-export function parseCxxSource(output: string): MutationResult {
+function buildExternalCxxSourceCommand(
+  sourceFiles: string[],
+  workDir: string,
+  config: MutationConfig,
+): string {
+  if (!config.buildCommand || !config.testCommand) {
+    throw new Error("stryker-cxx requires --build-command and --test-command");
+  }
+
+  const files = sourceFiles.join(",");
+  const timeoutSeconds =
+    config.timeoutMs !== undefined ? Math.max(1, Math.ceil(config.timeoutMs / 1000)) : undefined;
+  const buildCommand = config.buildCommand;
+  const testCommand = config.testCommand;
+
+  const parts = [
+    `'${shellEscape(config.strykerCxxBinary ?? "stryker-cxx")}'`,
+    "run",
+    "--repo",
+    `'${shellEscape(workDir)}'`,
+    "--files",
+    `'${shellEscape(files)}'`,
+    "--build-command",
+    `'${shellEscape(buildCommand)}'`,
+    "--test-command",
+    `'${shellEscape(testCommand)}'`,
+    "--format",
+    "json",
+  ];
+  if (config.base) {
+    parts.push("--base", `'${shellEscape(config.base)}'`);
+  }
+  if (config.maxMutants !== undefined) {
+    parts.push("--max-mutants", String(config.maxMutants));
+  }
+  if (config.includeMetal) {
+    parts.push("--include-metal");
+  }
+  if (config.mutators) {
+    parts.push("--mutators", `'${shellEscape(config.mutators)}'`);
+  }
+  if (timeoutSeconds !== undefined) {
+    parts.push("--timeout", String(timeoutSeconds));
+  }
+  parts.push("--output-format", "stryker-cxx");
+
+  return (
+    `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; cat "$report"`
+  );
+}
+
+export function parseCxxSource(output: string, tool: MutationTool = "cxx-source"): MutationResult {
   let report: CxxReport;
   try {
     report = JSON.parse(output) as CxxReport;
   } catch (error) {
     return {
       ...EMPTY_RESULT,
-      tool: "cxx-source",
-      error: `Failed to parse cxx-source output: ${error instanceof Error ? error.message : String(error)}`,
+      tool,
+      error: `Failed to parse ${tool} output: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
   const killed = report.killed ?? 0;
   const survived = report.survived ?? 0;
-  const buildError = report.build_error ?? 0;
+  const buildError = report.buildErrors ?? report.build_error ?? 0;
+  const timeout = report.timeouts ?? 0;
 
   const scored = killed + survived;
   let score: number;
   if (typeof report.score === "number") {
-    // Engine reports a 0-100 percentage; normalize to a 0-1 fraction.
-    score = report.score / 100;
+    // stryker-cxx.report.v1 reports a 0-1 fraction; the legacy embedded
+    // Marmorkrebs engine reported a 0-100 percentage.
+    score = report.schemaVersion === "stryker-cxx.report.v1" ? report.score : report.score / 100;
   } else if (scored > 0) {
     score = killed / scored;
   } else {
@@ -112,11 +182,11 @@ export function parseCxxSource(output: string): MutationResult {
     }));
 
   return {
-    tool: "cxx-source",
-    totalMutants: report.total ?? scored + buildError,
+    tool,
+    totalMutants: report.totalMutants ?? report.total ?? scored + buildError + timeout,
     killed,
     survived,
-    timeout: 0,
+    timeout,
     noCoverage: buildError,
     score,
     survivingMutants,

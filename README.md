@@ -16,20 +16,23 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `cargo-mutants` | Rust |
 | `go-mutesting` | Go |
 | `gomu` | Go |
-| `cxx-source` | C++/ObjC++ (built-in source engine) |
+| `stryker-cxx` | C++/ObjC++/Metal |
+| `cxx-source` | C++/ObjC++ legacy embedded fallback |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage per mutant, plus score).
 
-### `cxx-source` (built-in C++/ObjC++ engine)
+### `stryker-cxx` (C++/ObjC++/Metal)
 
-There is no external mutation CLI to drive for C++/ObjC++, so marmorkrebs ships its own source-mutation engine at `engines/cxx-source/marmorkrebs-cxx.py`. It applies Stryker-style operators (conditional-boundary, equality, logical, boolean-literal) to one source token at a time, then for **each** mutant **recompiles** the project (via `--build-command`) and re-runs a targeted test command (`--test-command`), classifying the mutant as KILLED (tests failed — good), SURVIVED (tests still passed — a coverage gap), or BUILD_ERROR (skipped, didn't compile).
+Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` applies source-level operators (conditional-boundary, equality, logical, boolean-literal) to one source token at a time, then for **each** mutant **recompiles** the project (via `--build-command`) and re-runs a targeted test command (`--test-command`), classifying the mutant as KILLED (tests failed), SURVIVED (tests still passed), or BUILD_ERROR (skipped, did not compile).
 
 `mull` (LLVM-bitcode mutation) is not used because it needs a self-contained test binary to toggle mutants in. This engine instead recompiles per mutant, which fits projects built as a single library and driven by an external test runner. Because each mutant triggers a full rebuild, scope the run tightly — `--base <ref>` restricts it to the lines a PR changed.
 
-`--build-command` is **required** for `cxx-source` (along with `--test-command`).
+`--build-command` is **required** for `stryker-cxx` (along with `--test-command`).
+
+`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. The old `--tool cxx-source` path remains as an embedded fallback for existing local scripts.
 
 ```
-marmorkrebs --dir <path> --tool cxx-source --base <ref> \
+marmorkrebs --dir <path> --tool stryker-cxx --base <ref> \
   --build-command '<compile>' --test-command '<targeted tests>'
 ```
 
@@ -47,7 +50,8 @@ Key options:
 - `--base <ref>` — derive it from the **local git diff** vs `<ref>`: branch commits since the merge-base, plus staged/unstaged edits and untracked files. This is the mode for locally staged PRs — review-grade mutation testing before anything is pushed.
 - `--changed-files` — or pass the file list explicitly
 - `--test-command <cmd>` — override the tool-default test command
-- `--build-command <cmd>` — build run between mutants (**required** for `cxx-source`)
+- `--build-command <cmd>` — build run between mutants (**required** for `stryker-cxx`)
+- `--stryker-cxx-bin <path>` — use a specific `stryker-cxx` binary
 - `--threshold <0-1>` — fail the run below a minimum mutation score
 - `--timeout <ms>` — mutation run timeout (default 480000)
 
@@ -81,6 +85,6 @@ marmorkrebs --repo openclaw/openclaw --pr 12345 --tool stryker \
 
 Marmorkrebs can run before a pull request exists. See [docs/local-vs-pr-usage.md](docs/local-vs-pr-usage.md) for the local `--base` flow, manual changed-file flow, PR flow, and C++/Metal mutation controls.
 
-## Standalone C++ mutation tool spec
+## Stryker C++ mutation tool spec
 
-The embedded `cxx-source` engine is intended to graduate into an independent tool. See [docs/cxx-mutant-spec.md](docs/cxx-mutant-spec.md) for the proposed standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.
+Marmorkrebs uses `stryker-cxx` as the C++ provider. See [docs/stryker-cxx-spec.md](docs/stryker-cxx-spec.md) for the standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.

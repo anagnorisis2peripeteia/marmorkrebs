@@ -9,6 +9,7 @@ import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.
 const TOOLS: ReadonlySet<string> = new Set([
   "stryker",
   "stryker-net",
+  "stryker-cxx",
   "go-mutesting",
   "gomu",
   "cargo-mutants",
@@ -28,18 +29,20 @@ Options:
   --dir <path>              Local checkout directory
   --repo <owner/repo>       GitHub repository (requires gh CLI)
   --pr <number>             PR number (used with --repo to get changed files)
-  --tool <tool>             Mutation tool: stryker | stryker-net | go-mutesting | gomu | cargo-mutants | mutmut | cxx-source
+  --tool <tool>             Mutation tool: stryker | stryker-net | stryker-cxx | go-mutesting | gomu | cargo-mutants | mutmut | cxx-source
   --changed-files <files>   Comma-separated list of changed files
   --base <ref>              Derive changed files from the local git diff vs <ref>
                             (branch commits since merge-base + staged/unstaged +
                             untracked) — for locally staged PRs, nothing pushed
   --test-command <cmd>      Custom test command (default: tool-specific)
-  --build-command <cmd>     Build command run between mutants (required for cxx-source)
+  --build-command <cmd>     Build command run between mutants (required for stryker-cxx/cxx-source)
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
-  --max-mutants <n>         cxx-source only: cap mutants after discovery
-  --include-metal           cxx-source only: mutate .metal files instead of skipping them
-  --mutators <names>        cxx-source only: comma-separated mutator names
+  --max-mutants <n>         stryker-cxx only: cap mutants after discovery
+  --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
+  --mutators <names>        stryker-cxx only: comma-separated mutator names
+  --stryker-cxx-bin <path>  Optional stryker-cxx executable (default: stryker-cxx)
+                            (or set STRYKER_CXX_BIN)
 
 Crabbox options (omit all for local execution):
   --lease-id <id>           Reuse an existing crabbox lease (skips provision+cleanup)
@@ -69,6 +72,7 @@ function parseCliArgs(argv: string[]): {
   maxMutants?: number;
   includeMetal?: boolean;
   mutators?: string;
+  strykerCxxBinary?: string;
   leaseId?: string;
   skipSync?: boolean;
   remoteDir?: string;
@@ -109,6 +113,11 @@ function parseCliArgs(argv: string[]): {
   if (args["max-mutants"]) result.maxMutants = parseInt(args["max-mutants"], 10);
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
+  if (args["stryker-cxx-bin"]) {
+    result.strykerCxxBinary = args["stryker-cxx-bin"];
+  } else if (process.env.STRYKER_CXX_BIN) {
+    result.strykerCxxBinary = process.env.STRYKER_CXX_BIN;
+  }
 
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
@@ -194,6 +203,7 @@ function main(): void {
     maxMutants: opts.maxMutants,
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
+    strykerCxxBinary: opts.strykerCxxBinary,
     leaseId: opts.leaseId,
     skipSync: opts.skipSync,
     remoteDir: opts.remoteDir,

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseCxxSource } from "./cxx-source.js";
+import { buildCxxSourceCommand, parseCxxSource } from "./cxx-source.js";
 
 describe("parseCxxSource", () => {
   it("parses the engine JSON report", () => {
@@ -45,9 +45,9 @@ describe("parseCxxSource", () => {
       score: 66.66666666666667,
     };
 
-    const result = parseCxxSource(JSON.stringify(report));
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
 
-    assert.equal(result.tool, "cxx-source");
+    assert.equal(result.tool, "stryker-cxx");
     assert.equal(result.killed, 2);
     assert.equal(result.survived, 1);
     assert.equal(result.timeout, 0);
@@ -60,6 +60,82 @@ describe("parseCxxSource", () => {
     assert.equal(result.survivingMutants[0].mutator, "LogicalOperator");
     assert.equal(result.survivingMutants[0].description, "&&->||");
     assert.equal(result.survivingMutants[0].status, "survived");
+    assert.equal(result.error, null);
+  });
+
+  it("builds stryker-cxx as the external C++ mutation command", () => {
+    const command = buildCxxSourceCommand(["src/foo.cpp"], "/repo", {
+      tool: "stryker-cxx",
+      buildCommand: "ninja -C build target",
+      testCommand: "./target_test",
+      base: "origin/main",
+      maxMutants: 5,
+      timeoutMs: 9000,
+    });
+
+    assert.ok(command.includes("'stryker-cxx' run"));
+    assert.ok(command.includes("--repo '/repo'"));
+    assert.ok(command.includes("--files 'src/foo.cpp'"));
+    assert.ok(command.includes("--output-format stryker-cxx"));
+    assert.ok(command.includes("--timeout 9"));
+  });
+
+  it("parses standalone stryker-cxx report v1", () => {
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      tool: "stryker-cxx",
+      targetFiles: ["aten/src/Reduce.mm"],
+      totalMutants: 2,
+      killed: 1,
+      survived: 1,
+      buildErrors: 0,
+      timeouts: 0,
+      score: 0.5,
+      mutants: [
+        {
+          id: "aten/src/Reduce.mm:42:12:ConditionalBoundary:abc123",
+          mutator: "ConditionalBoundary",
+          file: "aten/src/Reduce.mm",
+          line: 42,
+          col: 12,
+          original: "<=",
+          mutated: "<",
+          status: "KILLED",
+          detail: "",
+        },
+        {
+          id: "aten/src/Reduce.mm:130:20:LogicalOperator:def456",
+          mutator: "LogicalOperator",
+          file: "aten/src/Reduce.mm",
+          line: 130,
+          col: 20,
+          original: "&&",
+          mutated: "||",
+          status: "SURVIVED",
+          detail: "all targeted tests passed",
+        },
+      ],
+      mutationTestingElements: {
+        schemaVersion: "2.0",
+        files: {},
+        testFiles: {},
+      },
+    };
+
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+
+    assert.equal(result.tool, "stryker-cxx");
+    assert.equal(result.killed, 1);
+    assert.equal(result.survived, 1);
+    assert.equal(result.timeout, 0);
+    assert.equal(result.noCoverage, 0);
+    assert.equal(result.totalMutants, 2);
+    assert.equal(result.score, 0.5);
+    assert.equal(result.survivingMutants.length, 1);
+    assert.equal(result.survivingMutants[0].file, "aten/src/Reduce.mm");
+    assert.equal(result.survivingMutants[0].line, 130);
+    assert.equal(result.survivingMutants[0].mutator, "LogicalOperator");
+    assert.equal(result.survivingMutants[0].description, "&&->||");
     assert.equal(result.error, null);
   });
 

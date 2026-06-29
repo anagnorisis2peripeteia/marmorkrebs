@@ -54,17 +54,25 @@ This mode fetches the PR diff from GitHub and is useful for public PR validation
 
 ## C++ / ObjC++ / Metal local flow
 
-The built-in `cxx-source` engine mutates source files and reruns commands supplied by the caller. Keep this tightly scoped because each mutant rebuilds and retests the target.
+`stryker-cxx` mutates source files and reruns commands supplied by the caller. Keep this tightly scoped because each mutant rebuilds and retests the target.
 
 ```bash
 marmorkrebs \
   --dir /path/to/repo \
-  --tool cxx-source \
+  --tool stryker-cxx \
   --base origin/main \
   --build-command "ninja -C build target" \
   --test-command "./build/bin/target_test" \
   --max-mutants 25
 ```
+
+Use a specific `stryker-cxx` binary by adding:
+
+```bash
+--stryker-cxx-bin /usr/local/bin/stryker-cxx
+```
+
+If `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) is set, Marmorkrebs will call that binary while keeping the rest of the C++ mutation options stable. The old `--tool cxx-source` mode remains as an embedded fallback for existing local scripts.
 
 Optional controls:
 
