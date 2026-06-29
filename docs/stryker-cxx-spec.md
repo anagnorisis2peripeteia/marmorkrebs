@@ -2,11 +2,19 @@
 
 ## Purpose
 
-`stryker-cxx` is a standalone source-level mutation tester for C, C++, Objective-C++, and optionally Metal shader sources.
+`stryker-cxx` is a standalone source-level mutation tester for C, C++,
+Objective-C++, and optionally Metal shader sources.
 
-It owns the C++ mutation engine as an independent tool with a stable CLI, reports, configuration, and release story. Marmorkrebs treats it like other mutation tools: an external engine with a parser/adapter, not a private implementation detail.
+It owns the C++ mutation engine as an independent tool with a stable CLI,
+reports, configuration, and release story. Marmorkrebs treats it like other
+mutation tools: an external engine with a parser/adapter, not a private
+implementation detail.
 
-The tool is intended for PR-sized mutation gates where the caller supplies the build and test commands. It recompiles per mutant, which makes it suitable for projects that do not expose a single self-contained test binary and where LLVM-bitcode mutation tools are awkward to integrate.
+The tool is intended for PR-sized mutation gates where the caller supplies the
+build and test commands. It validates those commands on the unmodified checkout
+before executing mutants, then recompiles per mutant. That makes it suitable for
+projects that do not expose a single self-contained test binary and where
+LLVM-bitcode mutation tools are awkward to integrate.
 
 ## Non-goals
 
@@ -72,19 +80,86 @@ Mutation options:
 - `--mutators <names>`: comma-separated mutator list.
 - `--max-mutants <n>`: cap generated mutants.
 - `--include-metal`: include `.metal` files in token-level mode.
-- `--mode token|clang`: choose mutation implementation, default `token` initially.
+- `--mode token|clang|clang-ast`: choose mutation implementation, default
+  `token` initially.
+- `--dry-run-only`: validate the unmodified build/test lifecycle and stop.
+- `--skip-initial-test`: skip the unmodified build/test lifecycle for advanced or legacy flows.
+- `--check-command`: run a compile/type-check command after mutated build and before tests.
+- `--skip-tests`: run build/check only; viable mutants are reported as survivors.
+- `--coverage-file`, `--coverage-provider`: ingest simple JSON, `llvm-cov
+  export` JSON, or LCOV data and mark uncovered mutants as `NO_COVERAGE`.
+- `--coverage-test-command-template`: narrow per-mutant test commands from
+  supplied test-level coverage mappings.
+- `--coverage-helper-command-template`, `--coverage-helper-tests`: generate
+  per-test coverage exports through `stryker-cxx` and merge them into
+  `coveredBy` mappings before selecting per-mutant tests.
+- `--incremental`, `--baseline-file`, `--baseline-max-age-days`,
+  `--baseline-branch`, `--write-baseline`, `--clear-baseline`: reuse or update
+  compatible baseline cache entries.
+- `--batch-mutants`, `--batch-size`: batch compatible mutants in isolated worktrees and split failed batches for attribution.
+- `--plugin`, `--plugin-dir`, `--reporter`: load local plugin manifests for mutators and reporter metadata.
+- `--build-system`, `--build-dir`, `--build-target`, `--check-system`,
+  `--check-args`, `--test-target`, `--test-filter`: synthesize common
+  CMake/CTest/Ninja/Make/Meson/Bazel build/test commands plus `clang-tidy` or
+  `cppcheck` checker commands.
+- `--test-framework`, `--test-binary`, `--xctest-bundle`,
+  `--xctest-destination`, `--xctest-only-testing`, `--xctest-skip-testing`:
+  synthesize GoogleTest, Catch2, doctest, or XCTest test commands, including
+  xcodebuild-backed XCTest destination and target selection controls.
+- `--dashboard-export`, `--dashboard-upload-url`: write or explicitly upload dashboard JSON.
+- `--dashboard-version`, `--dashboard-retention-days`,
+  `--dashboard-auth-token-env`, `--dashboard-auth-header`: dashboard payload
+  compatibility, retention, and explicit upload-auth metadata forwarded to
+  `stryker-cxx`.
+- release provenance workflow and adapter/plugin fixtures live in the standalone
+  `stryker-cxx` repository.
+- package contents, signed-release policy, and dashboard upload policy are owned
+  by the standalone `stryker-cxx` repository.
+- full-spec validation is owned by the standalone `stryker-cxx` repository via
+  `npm run validate:full-spec`.
+- Marmorkrebs validates its provider forwarding with
+  `npm run validate:stryker-cxx-provider`.
+- `--timeout-factor`, `--timeout-constant-ms`: derive mutant timeouts from the
+  dry-run test duration when fixed `--timeout` is not supplied.
+- `--threshold-high`, `--threshold-low`, `--threshold-break`: Stryker-style
+  threshold bands. Marmorkrebs' `--threshold` maps to `--threshold-break`.
+- `--retain-worktrees`, `--retain-worktrees-for`,
+  `--retained-worktree-ttl-hours`, `--worker-tmp-dir`, `--env KEY=VALUE`:
+  resource and debug controls for isolated mutation workers.
+- `--env-inherit`, `--env-block`: inherited process-environment allow/block
+  controls for build/check/test commands and provider hooks.
+- Provider reports record env keys and redaction metadata, but explicit env
+  values and shell-style sensitive assignments such as `TOKEN=value` are
+  redacted before Marmorkrebs consumes or archives the report.
+
+Marmorkrebs must preserve `stryker-cxx` naming and semantics at this boundary:
+CLI options remain kebab-case, provider config fields remain lowerCamelCase, and
+status names are forwarded in Stryker/MTE-style uppercase. Marmorkrebs may
+normalize the resulting report into its own QA-gate view, but it should not
+rename or reinterpret `stryker-cxx` inputs before invoking the provider.
+The normalized `MutationResult` may expose provider evidence metadata such as
+`resourceIsolation`, but scoring and threshold interpretation remain
+Marmorkrebs-owned.
 
 Execution options:
 
 - `--timeout <seconds>`: per-mutant timeout.
+- `--dry-run-only`: run the unmutated build/test lifecycle and stop.
+- `--skip-initial-test`: skip the unmutated build/test lifecycle check.
+- `--timeout-factor <n>`: multiplier for dry-run-derived mutant timeouts.
+- `--timeout-constant-ms <n>`: constant milliseconds added to calibrated mutant timeouts.
 - `--jobs <n>`: parallel mutant workers, introduced after isolated worktrees exist.
-- `--worktree-mode inplace|git-worktree|copy`: default `inplace` for compatibility, safer modes later.
+- `--worktree-mode inplace|copy|git-worktree`: choose mutation isolation mode.
 - `--resume <report>`: skip completed mutants from a prior report.
 
 Report options:
 
 - `--report <path>`: JSON report path.
-- `--format json|markdown|html|sarif`: output format for stdout or generated report.
+- `--format json|markdown|html|sarif|mutation-testing-elements|github-annotations`:
+  output format for stdout or generated report.
+- `--threshold-high <0-1>`, `--threshold-low <0-1>`, `--threshold-break <0-1>`:
+  Stryker-style score bands. `--threshold` remains a compatibility alias for
+  `threshold-break`.
 - `--quiet`: write only report output to stdout.
 
 ### `list-mutants`
@@ -130,15 +205,15 @@ Marmorkrebs can map these into its existing gate semantics.
 
 The JSON report should be stable and versioned.
 
-The embedded Marmorkrebs engine now uses this as the compatibility direction:
-emit a `stryker-cxx.report.v1` wrapper while preserving legacy Marmorkrebs fields
-until the standalone tool exists. That lets Marmorkrebs consume old reports and
-new standalone-style reports through the same adapter.
+The standalone `stryker-cxx` report is the native C/C++ mutation contract.
+Marmorkrebs consumes `stryker-cxx.report.v1` and projects it into its
+language-agnostic result shape only at the orchestration boundary. New C++
+mutation output should be `stryker-cxx` by design rather than an embedded
+Marmorkrebs format with a compatibility wrapper.
 
-Default behavior for the embedded engine remains legacy-only for backward compatibility.
-The new `stryker-cxx` projection is explicit via `--output-format stryker-cxx`.
-Marmorkrebs keeps that contract stable by leaving old report consumers untouched
-unless the optional format switch is selected.
+Marmorkrebs keeps old cross-language report consumers stable by normalizing
+the standalone report after parsing. If a native-format output switch is
+selected, it should emit the unnormalized `stryker-cxx.report.v1` payload.
 
 ```json
 {
@@ -149,13 +224,27 @@ unless the optional format switch is selected.
   "startedAt": "2026-06-28T12:00:00Z",
   "completedAt": "2026-06-28T12:05:00Z",
   "score": 0.83,
-  "threshold": 0.8,
+  "threshold": 0.6,
+  "thresholds": {
+    "high": 0.9,
+    "low": 0.7,
+    "break": 0.6,
+    "status": "high"
+  },
+  "dryRun": {
+    "status": "PASSED"
+  },
   "totalMutants": 6,
   "killed": 5,
   "survived": 1,
   "buildErrors": 0,
   "timeouts": 0,
   "ignored": 0,
+  "summary": {
+    "byStatus": {"KILLED": 5, "SURVIVED": 1},
+    "byFile": {},
+    "byMutator": {}
+  },
   "mutants": [
     {
       "id": "src/foo.cpp:42:17:EqualityOperator:abc123",
@@ -182,6 +271,7 @@ Required compatibility notes:
 - `totalMutants: 0` should be explicit so callers can distinguish vacuous proof from strong evidence.
 - Build errors should not silently improve the score; they should be counted separately.
 - Ignored mutants should remain visible in reports but excluded from Marmorkrebs score interpretation.
+- Failed initial dry runs should be treated as infrastructure failures, not mutation proof.
 
 ## Stryker compatibility seam
 
@@ -194,7 +284,8 @@ The first compatibility layer should be report-level:
 - Keep Stryker-style mutator names where the concepts match.
 - Emit stable mutant IDs.
 - Emit Stryker-style statuses in a report projection: `Killed`, `Survived`,
-  `NoCoverage`, `Timeout`, `Ignored`, `Pending`, and infrastructure error statuses where needed.
+  `NoCoverage`, `Timeout`, `Ignored`, `Pending`, and infrastructure error
+  statuses where needed.
 - Preserve source locations as start/end line and column ranges.
 - Include source text per file when generating the report projection.
 - Keep the native `stryker-cxx.report.v1` schema as the authoritative contract,
@@ -209,7 +300,7 @@ own gate-result normalization.
 
 Initial mutators should match the embedded engine:
 
-- `ConditionalBoundary`: `<` `<=' `>` `>=` boundary changes.
+- `ConditionalBoundary`: `<`, `<=`, `>`, `>=` boundary changes.
 - `EqualityOperator`: `==` and `!=` swaps.
 - `LogicalOperator`: `&&` and `||` swaps.
 - `BooleanLiteral`: `true` and `false` swaps.
@@ -298,10 +389,15 @@ execution:
   buildCommand: "ninja -C build target"
   testCommand: "python test/run_test.py test_mps --keep-going"
   timeoutSeconds: 300
+  timeoutFactor: 1.5
+  timeoutConstantMs: 5000
   maxMutants: 50
   worktreeMode: inplace
 report:
-  threshold: 0.6
+  thresholds:
+    high: 0.9
+    low: 0.7
+    break: 0.6
   failOnEmpty: false
   artifactDir: agent_space/stryker-cxx
 ```
@@ -316,6 +412,8 @@ Markdown report should include:
 
 - Summary table.
 - Score and threshold.
+- Initial dry-run status and calibrated timeout.
+- Threshold band status and per-file/per-mutator/per-status summaries.
 - Changed files targeted.
 - Survivor list with file/line/mutator/before/after.
 - Build errors and timeout list.
@@ -335,10 +433,12 @@ Adapter plan:
 1. Run `stryker-cxx run` for `marmorkrebs --tool stryker-cxx`.
 2. Parse `stryker-cxx.report.v1`.
 3. Preserve current Marmorkrebs CLI flags: `--max-mutants`, `--include-metal`, and `--mutators`.
-4. Keep `cxx-source` as a legacy embedded fallback until old local scripts move over.
+4. Treat embedded C++ source mutation as historical only; PR skills and new local flows use `stryker-cxx`.
 
 Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
-`--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, and accepts
+`--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, forwards dry-run,
+checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, and threshold-band options, treats
+failed `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser.
 
 Marmorkrebs result mapping:
@@ -356,77 +456,88 @@ Marmorkrebs result mapping:
 
 ```text
 stryker-cxx/
+  package.json
+  bin/stryker-cxx.js
+  src/
+    cli.js
+    index.js
+  python/
+    stryker_cxx/
+      __init__.py
+      cli.py
+      engine.py
+      __main__.py
+      schema.py
   README.md
   LICENSE
-  pyproject.toml
-  src/cxx_mutant/
-    __init__.py
-    cli.py
-    config.py
-    discover.py
-    mutate.py
-    runner.py
-    report.py
-    token_mode.py
-    clang_mode.py
-  tests/
-    fixtures/
-    test_discover.py
-    test_mutate_restore.py
-    test_report_schema.py
-    test_cli.py
   docs/
-    config.md
-    reports.md
-    marmorkrebs.md
+    spec.md
+    validation.md
+    fixtures.md
     mutators.md
-  examples/
-    minimal/
-    cmake/
-    pytorch-mps/
+    release.md
+    signing.md
+    dashboard.md
+    contract.md
+    schemas/
+  fixtures/
+    adapters/
+    frameworks/
+    plugins/
+    config/
 ```
 
-Python is the lowest-friction first packaging route because the current engine is Python and the tool will often be invoked from heterogeneous repos. A later Rust or C++ rewrite is only justified if parallelism, parsing, or packaging becomes painful.
+This repo is intentionally split: JS owns CLI surface and orchestration glue, Python
+hosts discovery/execution/reporting. `marmorkrebs` treats this project as the
+authoritative standalone provider and keeps C++ normalization outside its own
+language-agnostic gate model.
 
 ## Milestones
 
 ### M0: extraction without behavior change
 
-- Move the embedded Python engine into a standalone repo.
-- Keep token-level mutation behavior equivalent.
-- Add CLI tests for report generation and exit codes.
-- Add docs for local PR-gate use.
-- Update Marmorkrebs to call the external tool when present.
+- ✅ Move the embedded Python engine into a standalone repo.
+- ✅ Keep token-level mutation behavior equivalent.
+- ✅ Add CLI tests for report generation and exit codes.
+- ✅ Add docs for local PR-gate use.
+- ✅ Update Marmorkrebs to call the external tool when present.
 
 ### M1: product-quality CLI
 
-- Add `list-mutants` and `run-mutant`.
-- Add stable mutant IDs.
-- Add config file support.
-- Add markdown report generation.
-- Add dirty-tree checks and safer artifact handling.
+- ✅ Add `list-mutants` and `run-mutant`.
+- ✅ Add stable mutant IDs.
+- ✅ Add config file support.
+- ✅ Add markdown report generation.
+- ✅ Add dirty-tree checks and safer artifact handling.
 
 ### M2: safer execution
 
-- Add timeout handling.
-- Add resume from report.
-- Add isolated worktree mode.
-- Add sharding groundwork.
+- ✅ Add timeout handling and calibration.
+- ✅ Add resume from report.
+- ✅ Add isolated copy/git-worktree execution.
+- ✅ Add sharding groundwork.
 
 ### M3: clang-aware mutation
 
-- Add `--mode clang` behind an explicit flag.
-- Read `compile_commands.json`.
-- Generate AST-confirmed mutants for core operators.
-- Compare token-mode and clang-mode output on known fixtures.
+- ✅ Add `--mode clang` and `--mode clang-ast`.
+- ✅ Read `compile_commands.json` when available.
+- ✅ Generate AST-confirmed candidates for selected operators.
+- ✅ Add `--coverage-helper` + test-level coverage selection coverage.
 
 ### M4: CI and ecosystem parity
 
-- Publish installable package.
-- Add GitHub Actions examples.
-- Add SARIF or annotation output.
-- Add threshold policy docs.
-- Add equivalent-mutant annotation flow.
+- ✅ Publish installable package.
+- ✅ Add GitHub release/provenance workflow and validation scripts.
+- ✅ Add SARIF and GitHub annotation output.
+- ✅ Add threshold band policy and CI-facing validation.
+- ✅ Add equivalent-noise handling via ignore comments.
+
+### M5: remaining
+
+- Tighten mutation catalog breadth and noise filtering.
+- Add richer source-language-specific AST generators for wider C++/ObjC++/Metal domains.
+- Expand cross-tool workflow parity and hosted dashboard integrations.
+- Add deeper equivalent-mutant/logic reduction logic.
 
 ## Acceptance criteria for independence
 
@@ -441,8 +552,65 @@ The standalone tool is ready to be treated as independent when:
 
 ## Open decisions
 
-- Initial license.
-- Whether this should become a true Stryker plugin package as well as the standalone CLI.
-- Whether Metal support remains token-only or gets its own shader-aware mode.
-- Whether thresholding belongs in `stryker-cxx`, Marmorkrebs, or both.
-- Whether clang-aware mode should be Python/libclang or a compiled helper binary.
+- Whether Metal should get a dedicated shader-mutator mode versus token-only defaults.
+- Whether additional ecosystem integrations should remain externalized to Marmorkrebs or be added as provider-native helpers.
+- Whether `stryker-cxx` and Marmorkrebs should share any additional proof/review metadata beyond `threshold` and `score`.
+- Whether clang-aware execution should move further toward precompiled helpers without losing reproducibility.
+
+## Conventions and boundary guarantees
+
+Conventions are part of compatibility:
+
+- PR and local production flows should use `--tool stryker-cxx`; `cxx-source` is
+  historical migration-only behavior and must not be the default path for new gate
+  flows.
+- Native `stryker-cxx` status vocabularies (`KILLED`, `SURVIVED`, etc.) stay
+  stable and are only normalized once at Marmorkrebs’ orchestration boundary.
+- CLI flags remain kebab-case; provider config/report fields remain
+  lowerCamelCase.
+- Shell command construction should stay shell-safe and preserve explicit env
+  policy (`env-inherit`/`env-block`), with no accidental token leakage in
+  generated normalized payloads.
+- Code and docs should keep the same operational conventions as the standalone
+  tool: repository-level formatting, command semantics, and boundary-oriented
+  normalization.
+
+### Coding and review conventions that must stay aligned
+
+- Keep repo-level and file-level formatting conventions identical where shared:
+  - `.editorconfig` whitespace and newline rules.
+  - TypeScript/JavaScript/JSON/YAML/Markdown: 2-space indentation.
+  - Repository docs and scripts should continue to spell command semantics in
+    repository-native terms.
+- Keep CLI flags kebab-case and config/report fields lowerCamelCase across both
+  repos.
+- Keep status families and command names stable at the seam (`STRYKER`-native
+  statuses from stryker-cxx are normalized only by Marmorkrebs orchestration
+  policy).
+- Keep shell-argument construction through helper escaping, not string interpolation.
+- New options that touch forwarding behavior must have paired parser/command tests
+  in Marmorkrebs and corresponding contract coverage in `stryker-cxx`.
+- Treat `cxx-source` references as legacy migration context; new production flows
+  use `--tool stryker-cxx`.
+
+### Concrete convention gate
+
+Before marking a feature as compatible with Stryker conventions, verify this:
+
+- `.editorconfig` rules stay the same in both repos.
+- CLI option names stay kebab-case and report/config fields stay lowerCamelCase.
+- Command and status semantics stay `stryker-cxx`-native until Marmorkrebs
+  normalization.
+- `marmorkrebs` parser changes have matching contract-focused tests in
+  `src/parsers/cxx-source.test.ts`.
+- `stryker-cxx` contract or schema changes update docs in `docs/spec.md`,
+  `docs/contract.md`, and any migration notes in `docs/validation.md`.
+- parser/normalization behavior changes include evidence via
+  `npm run validate:stryker-cxx-provider`.
+- Any flow touching reporting includes explicit mention of output shape and exit-code
+  compatibility in `docs/stryker-cxx-spec.md`.
+
+## Repository boundary note
+
+`cxx-mutant` remains a historical extraction point. The active C++ provider path for
+`marmorkrebs --tool stryker-cxx` is this repository (`cxx-mutant` compatibility mode is no longer required for current PR gates).

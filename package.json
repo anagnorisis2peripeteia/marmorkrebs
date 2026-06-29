@@ -9,7 +9,9 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test dist/**/*.test.js",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "lint": "node scripts/lint.mjs",
+    "validate:stryker-cxx-provider": "node scripts/validate-stryker-cxx-provider.mjs"
   },
   "engines": {
     "node": ">=20"

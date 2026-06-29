@@ -54,7 +54,14 @@ This mode fetches the PR diff from GitHub and is useful for public PR validation
 
 ## C++ / ObjC++ / Metal local flow
 
-`stryker-cxx` mutates source files and reruns commands supplied by the caller. Keep this tightly scoped because each mutant rebuilds and retests the target.
+`stryker-cxx` mutates source files and reruns commands supplied by the caller. It
+validates the unmodified checkout first, so `--test-command` must pass before any
+mutants are executed. Keep this tightly scoped because each mutant rebuilds and
+retests the target.
+
+This is the supported C++ gate path for both local and PR-based workflows in
+this repo. The older historical `cxx-mutant` path is not the supported
+`marmorkrebs --tool` PR flow.
 
 ```bash
 marmorkrebs \
@@ -62,6 +69,7 @@ marmorkrebs \
   --tool stryker-cxx \
   --base origin/main \
   --build-command "ninja -C build target" \
+  --check-command "clang++ -fsyntax-only src/foo.cpp" \
   --test-command "./build/bin/target_test" \
   --max-mutants 25
 ```
@@ -72,13 +80,34 @@ Use a specific `stryker-cxx` binary by adding:
 --stryker-cxx-bin /usr/local/bin/stryker-cxx
 ```
 
-If `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) is set, Marmorkrebs will call that binary while keeping the rest of the C++ mutation options stable. The old `--tool cxx-source` mode remains as an embedded fallback for existing local scripts.
+If `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) is set, Marmorkrebs will call that binary while keeping the rest of the C++ mutation options stable. New local and PR flows should use `--tool stryker-cxx`; embedded C++ source mutation is historical only and is not a supported gate path.
 
 Optional controls:
 
 - `--max-mutants <n>` caps the number of generated mutants for a run.
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
+- `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.
+- `--check-command <cmd>` runs an additional compile/type-check phase before tests.
+- `--skip-tests` runs build/check only and treats viable mutants as survivors.
+- `--coverage-file <path>` supplies simple JSON, `llvm-cov export` JSON, or LCOV data so uncovered mutants are reported as `NO_COVERAGE`; with JSON `coveredTests`/`testsByLine` data or helper-generated per-test coverage from `--coverage-helper-command-template <cmd>` plus `--coverage-helper-tests <tests>`, `--coverage-test-command-template <cmd>` can select per-mutant test commands via `{tests}`, `{tests_csv}`, `{tests_space}`, or `{first_test}`.
+- `--incremental` with `--baseline-file <path>` reuses compatible previous mutant results; add `--baseline-max-age-days <n>` and `--baseline-branch <name>` when cache reuse must be bounded by freshness or branch lifecycle.
+- `--batch-mutants --batch-size <n>` batches compatible mutants in isolated worktrees and splits failed batches for attribution.
+- `--worktree-mode <copy|git-worktree>` selects isolated worker mode for batching or retained debug workers.
+- `--build-system <name>` lets `stryker-cxx` synthesize CMake/CTest/Ninja/Make/Meson/Bazel build/test commands when explicit commands are not supplied; `--check-system <clang-tidy|cppcheck>` plus `--check-args <args>` can synthesize common static-check commands.
+- `--test-framework <name>` with optional `--test-binary` lets `stryker-cxx` synthesize GoogleTest, Catch2, doctest, or XCTest commands; gtest/catch2/doctest can discover one repo-local test executable automatically, while XCTest still needs a bundle/binary.
+- `--plugin`, `--plugin-dir`, and `--reporter` forward local `stryker-cxx` plugin manifests, provider hooks, and reporter requests.
+- `--retain-worktrees`, `--retain-worktrees-for <statuses>`,
+  `--retained-worktree-ttl-hours <n>`, `--worker-tmp-dir <path>`, and
+  `--env <KEY=VALUE,...>` forward resource/debug controls to `stryker-cxx` for
+  retained isolated workers and explicit build/check/test environment injection;
+  add `--env-inherit <KEY,...>` or `--env-block <KEY,...>` when inherited
+  process environment needs an explicit allow/deny policy. Retained workers
+  should use `copy` or `git-worktree` mode.
+- `--dashboard-export` writes a compact dashboard payload; `--dashboard-upload-url` posts it only to the explicit URL supplied by the caller.
+- `--threshold-high`, `--threshold-low`, and `--threshold-break` forward Stryker-style score bands.
+- `--skip-initial-test` is available for legacy/debug flows, but PR gates should normally keep the dry run enabled.
+- `--dry-run-only` validates the build/test lifecycle without executing mutants.
 
 Use `--include-metal` only when the test command actually exercises the shader path. Otherwise the run will spend time creating mutants the selected tests cannot kill.
 
@@ -87,11 +116,15 @@ Use `--include-metal` only when the test command actually exercises the shader p
 A successful run exits zero and writes a `MutationResult` JSON object to stdout. Important fields are:
 
 - `score`: mutation score for the scoped run.
+- `thresholds`: optional `stryker-cxx` high/low/break band result.
+- `dryRun`: optional `stryker-cxx` initial build/test validation result.
+- `baseline`: optional `stryker-cxx` cache hit/miss/write metadata.
 - `totalMutants`: number of mutants reported for the scoped run.
 - `ignored`: mutants suppressed by Stryker-style ignore comments and excluded from score.
+- `noCoverage`: mutants skipped because supplied coverage data did not cover their line, plus legacy non-viable C++ counts normalized into Marmorkrebs' common shape.
 - `survivingMutants`: mutants not killed by the selected tests.
 
-For PR gates, treat `totalMutants: 0` as vacuous proof rather than strong evidence. Also treat `totalMutants - ignored == 0` as no scored mutation proof. A survivor is a signal that the test plan may not cover the behavior being changed.
+For PR gates, treat `totalMutants: 0` as vacuous proof rather than strong evidence. Also treat `totalMutants - ignored == 0` as no scored mutation proof. A survivor is a signal that the test plan may not cover the behavior being changed. A failed `dryRun` is an infrastructure/test-selection error, not a mutation pass.
 
 ## Relationship to ClawSweeper and local Mantis
 

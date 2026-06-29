@@ -5,8 +5,7 @@ export type MutationTool =
   | "go-mutesting"
   | "cargo-mutants"
   | "mutmut"
-  | "gomu"
-  | "cxx-source";
+  | "gomu";
 
 export interface CrabboxLeaseOptions {
   provider: string;
@@ -32,12 +31,65 @@ export interface MutationConfig {
   tool: MutationTool;
   testCommand?: string;
   buildCommand?: string;
+  checkCommand?: string;
+  buildSystem?: string;
+  buildDir?: string;
+  buildTarget?: string;
+  checkSystem?: string;
+  checkArgs?: string;
+  testTarget?: string;
+  testFilter?: string;
+  testFramework?: string;
+  testBinary?: string;
+  xctestBundle?: string;
+  xctestDestination?: string;
+  xctestOnlyTesting?: string[];
+  xctestSkipTesting?: string[];
   base?: string;
   threshold?: number;
+  thresholdHigh?: number;
+  thresholdLow?: number;
+  thresholdBreak?: number;
   timeoutMs?: number;
+  timeoutFactor?: number;
+  timeoutConstantMs?: number;
+  skipInitialTest?: boolean;
+  dryRunOnly?: boolean;
+  skipTests?: boolean;
+  coverageFile?: string;
+  coverageProvider?: string;
+  coverageTestCommandTemplate?: string;
+  coverageHelperCommandTemplate?: string;
+  coverageHelperTests?: string[];
+  incremental?: boolean;
+  baselineFile?: string;
+  baselineMaxAgeDays?: number;
+  baselineBranch?: string;
+  writeBaseline?: string;
+  clearBaseline?: boolean;
+  batchMutants?: boolean;
+  batchSize?: number;
+  worktreeMode?: string;
+  retainWorktrees?: boolean;
+  retainWorktreesFor?: string[];
+  retainedWorktreeTtlHours?: number;
+  workerTmpDir?: string;
+  env?: string[];
+  envInherit?: string[];
+  envBlock?: string[];
   maxMutants?: number;
   includeMetal?: boolean;
   mutators?: string;
+  mode?: string;
+  plugins?: string[];
+  pluginDirs?: string[];
+  reporters?: string[];
+  dashboardExport?: string;
+  dashboardUploadUrl?: string;
+  dashboardVersion?: string;
+  dashboardRetentionDays?: number;
+  dashboardAuthTokenEnv?: string;
+  dashboardAuthHeader?: string;
   strykerCxxBinary?: string;
   leaseId?: string;
   skipSync?: boolean;
@@ -63,6 +115,17 @@ export interface MutationResult {
   ignored: number;
   score: number;
   survivingMutants: SurvivingMutant[];
+  thresholds?: {
+    high: number;
+    low: number;
+    break: number;
+    status: "failed" | "low" | "acceptable" | "high";
+  };
+  dryRun?: {
+    status: string;
+    failureReason?: string;
+  };
+  resourceIsolation?: Record<string, unknown>;
   error: string | null;
   elapsedMs: number;
 }

@@ -67,17 +67,128 @@ describe("parseCxxSource", () => {
     const command = buildCxxSourceCommand(["src/foo.cpp"], "/repo", {
       tool: "stryker-cxx",
       buildCommand: "ninja -C build target",
+      checkCommand: "clang++ -fsyntax-only src/foo.cpp",
       testCommand: "./target_test",
+      buildSystem: "cmake",
+      buildDir: "build",
+      buildTarget: "target",
+      checkSystem: "clang-tidy",
+      checkArgs: "--checks=-*,bugprone-*",
+      testFilter: "Foo.*",
+      testFramework: "gtest",
+      testBinary: "./foo_tests",
+      xctestDestination: "platform=iOS Simulator,name=iPhone 15",
+      xctestOnlyTesting: ["MathFixtureTests/testAdd"],
+      xctestSkipTesting: ["MathFixtureTests/testSlow"],
       base: "origin/main",
       maxMutants: 5,
       timeoutMs: 9000,
+      timeoutFactor: 2,
+      timeoutConstantMs: 750,
+      thresholdHigh: 0.9,
+      thresholdLow: 0.7,
+      thresholdBreak: 0.5,
+      mode: "clang-ast",
+      coverageFile: "coverage.json",
+      coverageProvider: "llvm-cov",
+      coverageTestCommandTemplate: "pytest -k {tests_space}",
+      coverageHelperCommandTemplate: "run-one-test {test} --coverage-out {coverage_file}",
+      coverageHelperTests: ["MathFixtureTests/testAdd"],
+      incremental: true,
+      baselineFile: ".stryker-cxx-baseline.json",
+      baselineMaxAgeDays: 7,
+      baselineBranch: "feature/mps",
+      writeBaseline: ".stryker-cxx-baseline.json",
+      batchMutants: true,
+      batchSize: 3,
+      worktreeMode: "copy",
+      retainWorktrees: true,
+      retainWorktreesFor: ["SURVIVED", "TIMEOUT"],
+      retainedWorktreeTtlHours: 24,
+      workerTmpDir: "/tmp/stryker-cxx-workers",
+      env: ["STRYKER_CXX_FLAG=yes"],
+      envInherit: ["PATH"],
+      envBlock: ["GITHUB_TOKEN"],
+      plugins: ["plugin.json"],
+      pluginDirs: ["plugins/example"],
+      reporters: ["plugin-json"],
+      dashboardExport: "dashboard.json",
+      dashboardUploadUrl: "https://dashboard.example/upload",
+      dashboardVersion: "1",
+      dashboardRetentionDays: 14,
+      dashboardAuthTokenEnv: "STRYKER_CXX_DASHBOARD_TOKEN",
+      dashboardAuthHeader: "Authorization",
     });
 
     assert.ok(command.includes("'stryker-cxx' run"));
     assert.ok(command.includes("--repo '/repo'"));
     assert.ok(command.includes("--files 'src/foo.cpp'"));
+    assert.ok(command.includes("--check-command 'clang++ -fsyntax-only src/foo.cpp'"));
+    assert.ok(command.includes("--build-system 'cmake'"));
+    assert.ok(command.includes("--build-dir 'build'"));
+    assert.ok(command.includes("--build-target 'target'"));
+    assert.ok(command.includes("--check-system 'clang-tidy'"));
+    assert.ok(command.includes("--check-args '--checks=-*,bugprone-*'"));
+    assert.ok(command.includes("--test-filter 'Foo.*'"));
+    assert.ok(command.includes("--test-framework 'gtest'"));
+    assert.ok(command.includes("--test-binary './foo_tests'"));
+    assert.ok(command.includes("--xctest-destination 'platform=iOS Simulator,name=iPhone 15'"));
+    assert.ok(command.includes("--xctest-only-testing 'MathFixtureTests/testAdd'"));
+    assert.ok(command.includes("--xctest-skip-testing 'MathFixtureTests/testSlow'"));
     assert.ok(command.includes("--output-format stryker-cxx"));
     assert.ok(command.includes("--timeout 9"));
+    assert.ok(command.includes("--timeout-factor 2"));
+    assert.ok(command.includes("--timeout-constant-ms 750"));
+    assert.ok(command.includes("--threshold-high 0.9"));
+    assert.ok(command.includes("--threshold-low 0.7"));
+    assert.ok(command.includes("--threshold-break 0.5"));
+    assert.ok(command.includes("--mode 'clang-ast'"));
+    assert.ok(command.includes("--coverage-file 'coverage.json'"));
+    assert.ok(command.includes("--coverage-provider 'llvm-cov'"));
+    assert.ok(command.includes("--coverage-test-command-template 'pytest -k {tests_space}'"));
+    assert.ok(
+      command.includes(
+        "--coverage-helper-command-template 'run-one-test {test} --coverage-out {coverage_file}'",
+      ),
+    );
+    assert.ok(command.includes("--coverage-helper-tests 'MathFixtureTests/testAdd'"));
+    assert.ok(command.includes("--incremental"));
+    assert.ok(command.includes("--baseline-file '.stryker-cxx-baseline.json'"));
+    assert.ok(command.includes("--baseline-max-age-days 7"));
+    assert.ok(command.includes("--baseline-branch 'feature/mps'"));
+    assert.ok(command.includes("--write-baseline '.stryker-cxx-baseline.json'"));
+    assert.ok(command.includes("--batch-mutants"));
+    assert.ok(command.includes("--batch-size 3"));
+    assert.ok(command.includes("--worktree-mode 'copy'"));
+    assert.ok(command.includes("--retain-worktrees"));
+    assert.ok(command.includes("--retain-worktrees-for 'SURVIVED,TIMEOUT'"));
+    assert.ok(command.includes("--retained-worktree-ttl-hours 24"));
+    assert.ok(command.includes("--worker-tmp-dir '/tmp/stryker-cxx-workers'"));
+    assert.ok(command.includes("--env 'STRYKER_CXX_FLAG=yes'"));
+    assert.ok(command.includes("--env-inherit 'PATH'"));
+    assert.ok(command.includes("--env-block 'GITHUB_TOKEN'"));
+    assert.ok(command.includes("--plugin 'plugin.json'"));
+    assert.ok(command.includes("--plugin-dir 'plugins/example'"));
+    assert.ok(command.includes("--reporter 'plugin-json'"));
+    assert.ok(command.includes("--dashboard-export 'dashboard.json'"));
+    assert.ok(command.includes("--dashboard-upload-url 'https://dashboard.example/upload'"));
+    assert.ok(command.includes("--dashboard-version '1'"));
+    assert.ok(command.includes("--dashboard-retention-days 14"));
+    assert.ok(command.includes("--dashboard-auth-token-env 'STRYKER_CXX_DASHBOARD_TOKEN'"));
+    assert.ok(command.includes("--dashboard-auth-header 'Authorization'"));
+  });
+
+  it("builds stryker-cxx checker-only commands without requiring a test command", () => {
+    const command = buildCxxSourceCommand(["src/foo.cpp"], "/repo", {
+      tool: "stryker-cxx",
+      buildCommand: "ninja -C build target",
+      checkCommand: "clang++ -fsyntax-only src/foo.cpp",
+      skipTests: true,
+    });
+
+    assert.ok(command.includes("--skip-tests"));
+    assert.ok(command.includes("--check-command 'clang++ -fsyntax-only src/foo.cpp'"));
+    assert.ok(!command.includes("--test-command"));
   });
 
   it("parses standalone stryker-cxx report v1", () => {
@@ -85,13 +196,24 @@ describe("parseCxxSource", () => {
       schemaVersion: "stryker-cxx.report.v1",
       tool: "stryker-cxx",
       targetFiles: ["aten/src/Reduce.mm"],
-      totalMutants: 2,
+      totalMutants: 5,
       killed: 1,
       survived: 1,
       buildErrors: 0,
+      checkErrors: 1,
+      noCoverage: 2,
       timeouts: 0,
       ignored: 1,
       score: 0.5,
+      thresholds: { high: 0.9, low: 0.7, break: 0.5, status: "low" },
+      dryRun: { status: "PASSED" },
+      execution: {
+        resourceIsolation: {
+          worktreeMode: "copy",
+          environmentKeys: ["SECRET_TOKEN"],
+          redaction: { enabled: true, replacement: "[REDACTED]" },
+        },
+      },
       mutants: [
         {
           id: "aten/src/Reduce.mm:42:12:ConditionalBoundary:abc123",
@@ -141,10 +263,17 @@ describe("parseCxxSource", () => {
     assert.equal(result.killed, 1);
     assert.equal(result.survived, 1);
     assert.equal(result.timeout, 0);
-    assert.equal(result.noCoverage, 0);
+    assert.equal(result.noCoverage, 3);
     assert.equal(result.ignored, 1);
-    assert.equal(result.totalMutants, 2);
+    assert.equal(result.totalMutants, 5);
     assert.equal(result.score, 0.5);
+    assert.deepEqual(result.thresholds, { high: 0.9, low: 0.7, break: 0.5, status: "low" });
+    assert.deepEqual(result.dryRun, { status: "PASSED" });
+    assert.deepEqual(result.resourceIsolation, {
+      worktreeMode: "copy",
+      environmentKeys: ["SECRET_TOKEN"],
+      redaction: { enabled: true, replacement: "[REDACTED]" },
+    });
     assert.equal(result.survivingMutants.length, 1);
     assert.equal(result.survivingMutants[0].file, "aten/src/Reduce.mm");
     assert.equal(result.survivingMutants[0].line, 130);
@@ -185,7 +314,7 @@ describe("parseCxxSource", () => {
       score: 100.0,
     };
 
-    const result = parseCxxSource(JSON.stringify(report));
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
     assert.equal(result.killed, 1);
     assert.equal(result.survived, 0);
     assert.equal(result.noCoverage, 1);
@@ -199,7 +328,7 @@ describe("parseCxxSource", () => {
   it("returns error for non-JSON output", () => {
     const result = parseCxxSource("not json at all");
     assert.notEqual(result.error, null);
-    assert.equal(result.tool, "cxx-source");
+    assert.equal(result.tool, "stryker-cxx");
   });
 
   it("defaults score to 1 when nothing was scored", () => {
@@ -212,7 +341,7 @@ describe("parseCxxSource", () => {
       mutants: [],
       score: 100.0,
     };
-    const result = parseCxxSource(JSON.stringify(report));
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
     assert.equal(result.killed, 0);
     assert.equal(result.survived, 0);
     assert.equal(result.ignored, 0);
@@ -247,5 +376,29 @@ describe("parseCxxSource", () => {
     assert.equal(result.ignored, 1);
     assert.equal(result.score, 1);
     assert.equal(result.survivingMutants.length, 0);
+  });
+
+  it("treats failed stryker-cxx dry runs as infrastructure errors", () => {
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      tool: "stryker-cxx",
+      targetFiles: ["x.cpp"],
+      totalMutants: 1,
+      killed: 0,
+      survived: 0,
+      buildErrors: 0,
+      timeouts: 0,
+      ignored: 0,
+      score: 1,
+      dryRun: {
+        status: "FAILED",
+        failureReason: "initial tests failed",
+      },
+      mutants: [],
+    };
+
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.equal(result.error, "initial tests failed");
+    assert.deepEqual(result.dryRun, { status: "FAILED", failureReason: "initial tests failed" });
   });
 });

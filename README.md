@@ -17,19 +17,18 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `go-mutesting` | Go |
 | `gomu` | Go |
 | `stryker-cxx` | C++/ObjC++/Metal |
-| `cxx-source` | C++/ObjC++ legacy embedded fallback |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
 ### `stryker-cxx` (C++/ObjC++/Metal)
 
-Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` applies source-level operators to one source token or statement at a time, then for each non-ignored mutant recompiles the project (via `--build-command`) and re-runs a targeted test command (`--test-command`). Native statuses such as `KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED` are normalized into Marmorkrebs' common result shape.
+Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` first validates the unmodified project with the supplied build/test commands, then applies source-level operators to one source token or statement at a time. For each non-ignored mutant it recompiles the project (via `--build-command`) and re-runs a targeted test command (`--test-command`). Native statuses such as `KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED` are normalized into Marmorkrebs' common result shape.
 
 `mull` (LLVM-bitcode mutation) is not used because it needs a self-contained test binary to toggle mutants in. This engine instead recompiles per mutant, which fits projects built as a single library and driven by an external test runner. Because each mutant triggers a full rebuild, scope the run tightly — `--base <ref>` restricts it to the lines a PR changed.
 
-`--build-command` is **required** for `stryker-cxx` (along with `--test-command`).
+`--build-command` is **required** for `stryker-cxx` (along with `--test-command`). The test command must pass on the unmutated checkout unless you deliberately pass `--skip-initial-test`.
 
-`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. The old `--tool cxx-source` path remains as an embedded fallback for existing local scripts.
+`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. New local and PR flows should use this provider directly; the embedded C++ source mutator is not a supported PR workflow.
 
 ```
 marmorkrebs --dir <path> --tool stryker-cxx --base <ref> \
@@ -51,9 +50,40 @@ Key options:
 - `--changed-files` — or pass the file list explicitly
 - `--test-command <cmd>` — override the tool-default test command
 - `--build-command <cmd>` — build run between mutants (**required** for `stryker-cxx`)
+- `--check-command <cmd>` — optional compile/type-check phase run before tests for each C++ mutant
+- `--skip-tests` — run `stryker-cxx` build/check phases only and mark viable mutants as survivors
+- `--coverage-file <path>` / `--coverage-provider <id>` / `--coverage-test-command-template <cmd>` / `--coverage-helper-command-template <cmd>` / `--coverage-helper-tests <tests>` — forward coverage data so `stryker-cxx` can mark uncovered mutants as `NO_COVERAGE`; when coverage includes covering tests or helper-generated per-test coverage, select per-mutant test commands
+- `--incremental`, `--baseline-file <path>`, `--baseline-max-age-days <n>`, `--baseline-branch <name>`, `--write-baseline <path>`, `--clear-baseline` — forward baseline-cache and reuse-policy controls to `stryker-cxx`
+- `--batch-mutants`, `--batch-size <n>`, `--worktree-mode <inplace|copy|git-worktree>` — forward opt-in isolated-worktree batching controls to `stryker-cxx`
+- `--retain-worktrees`, `--retain-worktrees-for <statuses>`,
+  `--retained-worktree-ttl-hours <n>`, `--worker-tmp-dir <path>`,
+  `--env <KEY=VALUE,...>`, `--env-inherit <KEY,...>`,
+  `--env-block <KEY,...>`, `--dashboard-version <v>`,
+  `--dashboard-retention-days <n>`, `--dashboard-auth-token-env <KEY>`,
+  `--dashboard-auth-header <name>` — forward debug worktree retention,
+  per-status retention policy, retained-worker cleanup TTL, worker temp-root,
+  explicit env injection, inherited-env allow/block controls, and dashboard
+  policy metadata to `stryker-cxx`; provider reports keep env keys and
+  redaction metadata, not explicit env values, and Marmorkrebs preserves
+  `resourceIsolation` evidence metadata in the normalized result; use `copy` or
+  `git-worktree` mode when retaining workers
+- `--build-system <cmake|ctest|ninja|make|meson|bazel>` plus `--build-dir`, `--build-target`, `--check-system <clang-tidy|cppcheck>`, `--check-args <args>`, `--test-target`, `--test-filter` — let `stryker-cxx` synthesize common build/check/test commands
+- `--test-framework <gtest|catch2|doctest|xctest>`, `--test-binary`,
+  `--xctest-bundle`, `--xctest-destination`,
+  `--xctest-only-testing`, `--xctest-skip-testing` — let `stryker-cxx`
+  synthesize framework-specific test commands; for gtest/catch2/doctest,
+  `--test-binary` is optional when exactly one repo-local test executable is
+  discoverable, and XCTest destination/only/skip controls use the
+  `xcodebuild test-without-building` path
+- `--plugin`, `--plugin-dir`, `--reporter` — forward local plugin manifests, provider hooks, and reporter selection to `stryker-cxx`
+- `--dashboard-export`, `--dashboard-upload-url` — forward dashboard export/upload controls to `stryker-cxx`
 - `--stryker-cxx-bin <path>` — use a specific `stryker-cxx` binary
-- `--threshold <0-1>` — fail the run below a minimum mutation score
+- `--threshold <0-1>` — compatibility alias for the `stryker-cxx` break threshold
+- `--threshold-high <0-1>`, `--threshold-low <0-1>`, `--threshold-break <0-1>` — forward Stryker-style score bands to `stryker-cxx`
 - `--timeout <ms>` — mutation run timeout (default 480000)
+- `--timeout-factor <n>`, `--timeout-constant-ms <n>` — forward dry-run-derived timeout calibration to `stryker-cxx`
+- `--skip-initial-test` — skip the unmutated build/test validation for advanced or legacy flows
+- `--dry-run-only` — validate build/test commands and emit the lifecycle report without executing mutants
 
 ### Crabbox execution (optional)
 
@@ -70,15 +100,19 @@ npm install
 npm run build     # tsc -> dist/
 npm test          # node --test against dist
 npm run check     # typecheck only
+npm run validate:stryker-cxx-provider
 ```
 
 Node >= 20. `test-fixtures/` holds real captured outputs from each mutation tool that the parser tests assert against.
+The `validate:stryker-cxx-provider` target runs the normal Marmorkrebs checks and
+smokes the standalone `stryker-cxx` provider when `stryker-cxx` is available on
+`PATH` or `STRYKER_CXX_BIN` points at a local checkout/binary.
 
 ## Example: focused Stryker on a PR
 
 ```
 marmorkrebs --repo openclaw/openclaw --pr 12345 --tool stryker \
-  --threshold 0.6 --provider local-container --image deps-base
+  --threshold-break 0.6 --provider local-container --image deps-base
 ```
 
 ## Local and PR usage
@@ -87,4 +121,4 @@ Marmorkrebs can run before a pull request exists. See [docs/local-vs-pr-usage.md
 
 ## Stryker C++ mutation tool spec
 
-Marmorkrebs uses `stryker-cxx` as the C++ provider. See [docs/stryker-cxx-spec.md](docs/stryker-cxx-spec.md) for the standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.
+Marmorkrebs uses `stryker-cxx` as the C++ provider. PR skills and new profiles should use `--tool stryker-cxx`; embedded C++ mutation is historical and not the supported gate path. See [docs/stryker-cxx-spec.md](docs/stryker-cxx-spec.md) for the standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.
