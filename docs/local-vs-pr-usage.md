@@ -82,6 +82,14 @@ Use a specific `stryker-cxx` binary by adding:
 
 If `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) is set, Marmorkrebs will call that binary while keeping the rest of the C++ mutation options stable. New local and PR flows should use `--tool stryker-cxx`; embedded C++ source mutation is historical only and is not a supported gate path.
 
+Marmorkrebs forwards compiled artifact selectors directly to `stryker-cxx`.
+Use them only when the selected `stryker-cxx` binary supports the requested
+backend:
+
+```bash
+--artifact-backend compiled-object --artifact-fallback source-overlay
+```
+
 Optional controls:
 
 - `--max-mutants <n>` caps the number of generated mutants for a run.
@@ -97,6 +105,8 @@ Optional controls:
 - `--incremental` with `--baseline-file <path>` reuses compatible previous mutant results; add `--baseline-max-age-days <n>` and `--baseline-branch <name>` when cache reuse must be bounded by freshness or branch lifecycle.
 - `--batch-mutants --batch-size <n>` batches compatible mutants in isolated worktrees and splits failed batches for attribution.
 - `--worktree-mode <copy|git-worktree>` selects isolated worker mode for batching or retained debug workers.
+- `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` selects the native `stryker-cxx` artifact backend. Compiled artifact execution is currently a CMake/CTest `stryker-cxx` feature; Marmorkrebs forwards the flag and lets the provider preflight unsupported build systems.
+- `--artifact-fallback <none|source-overlay>` forwards the provider fallback policy.
 - `--build-system <name>` lets `stryker-cxx` synthesize CMake/CTest/Ninja/Make/Meson/Bazel build/test commands when explicit commands are not supplied; `--check-system <clang-tidy|cppcheck>` plus `--check-args <args>` can synthesize common static-check commands.
 - `--test-framework <name>` with optional `--test-binary` lets `stryker-cxx` synthesize GoogleTest, Catch2, doctest, or XCTest commands; gtest/catch2/doctest can discover one repo-local test executable automatically, while XCTest still needs a bundle/binary.
 - `--plugin`, `--plugin-dir`, and `--reporter` forward local `stryker-cxx` plugin manifests, provider hooks, and reporter requests.

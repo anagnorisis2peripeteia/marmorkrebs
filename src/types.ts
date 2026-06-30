@@ -35,6 +35,8 @@ export interface MutationConfig {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  artifactBackend?: string;
+  artifactFallback?: string;
   xcodeWorkspace?: string;
   xcodeProject?: string;
   xcodeScheme?: string;

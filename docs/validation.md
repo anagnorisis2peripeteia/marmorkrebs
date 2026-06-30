@@ -25,6 +25,9 @@ result is a non-empty `stryker-cxx` result without an error.
   and contract completeness.
 - Ensure a runnable `stryker-cxx` binary is available (`PATH`/`STRYKER_CXX_BIN`).
 - Run `npm run validate:stryker-cxx-provider` in Marmorkrebs.
+- For compiled-artifact proof, pass `--artifact-backend` through Marmorkrebs and
+  use a `stryker-cxx` binary/new enough checkout that supports the requested
+  backend.
 - Optionally run both repos' docs-checking and smoke commands together in your CI
   release job.
 - Keep embedded historical C++ behavior discussions out of new PR/prod gate flows;

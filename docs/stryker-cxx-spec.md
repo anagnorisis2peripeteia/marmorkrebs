@@ -489,12 +489,14 @@ Adapter plan:
 
 1. Run `stryker-cxx run` for `marmorkrebs --tool stryker-cxx`.
 2. Parse `stryker-cxx.report.v1`.
-3. Preserve current Marmorkrebs CLI flags: `--max-mutants`, `--include-metal`, and `--mutators`.
+3. Preserve `stryker-cxx` CLI semantics by forwarding provider-native options
+   such as mutator selection, build/test adapters, coverage, batching, and
+   artifact backend selection without renaming or normalization.
 4. Treat embedded C++ source mutation as historical only; PR skills and new local flows use `stryker-cxx`.
 
 Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
 `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, forwards dry-run,
-checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, threshold-band, and equivalent-suppression options, treats
+checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, threshold-band, artifact-backend, and equivalent-suppression options, treats
 failed `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser.
 

@@ -72,6 +72,8 @@ describe("parseCxxSource", () => {
       buildSystem: "cmake",
       buildDir: "build",
       buildTarget: "target",
+      artifactBackend: "compiled-object",
+      artifactFallback: "source-overlay",
       xcodeWorkspace: "App.xcworkspace",
       xcodeScheme: "AppTests",
       xcodeConfiguration: "Debug",
@@ -138,6 +140,8 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--build-system 'cmake'"));
     assert.ok(command.includes("--build-dir 'build'"));
     assert.ok(command.includes("--build-target 'target'"));
+    assert.ok(command.includes("--artifact-backend 'compiled-object'"));
+    assert.ok(command.includes("--artifact-fallback 'source-overlay'"));
     assert.ok(command.includes("--xcode-workspace 'App.xcworkspace'"));
     assert.ok(command.includes("--xcode-scheme 'AppTests'"));
     assert.ok(command.includes("--xcode-configuration 'Debug'"));

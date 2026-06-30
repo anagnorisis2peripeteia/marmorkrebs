@@ -39,6 +39,9 @@ Options:
   --build-system <name>     stryker-cxx only: cmake | ctest | ninja | make | meson | bazel | xcodebuild
   --build-dir <path>        stryker-cxx only: adapter build directory
   --build-target <target>   stryker-cxx only: adapter build target
+  --artifact-backend <mode> stryker-cxx only: source-overlay | compiled-executable | compiled-library | compiled-object
+  --artifact-fallback <mode>
+                            stryker-cxx only: none | source-overlay
   --xcode-workspace <path>  stryker-cxx only: xcodebuild workspace
   --xcode-project <path>    stryker-cxx only: xcodebuild project
   --xcode-scheme <name>     stryker-cxx only: xcodebuild scheme
@@ -154,6 +157,8 @@ function parseCliArgs(argv: string[]): {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  artifactBackend?: string;
+  artifactFallback?: string;
   xcodeWorkspace?: string;
   xcodeProject?: string;
   xcodeScheme?: string;
@@ -271,6 +276,8 @@ function parseCliArgs(argv: string[]): {
   if (args["build-system"]) result.buildSystem = args["build-system"];
   if (args["build-dir"]) result.buildDir = args["build-dir"];
   if (args["build-target"]) result.buildTarget = args["build-target"];
+  if (args["artifact-backend"]) result.artifactBackend = args["artifact-backend"];
+  if (args["artifact-fallback"]) result.artifactFallback = args["artifact-fallback"];
   if (args["xcode-workspace"]) result.xcodeWorkspace = args["xcode-workspace"];
   if (args["xcode-project"]) result.xcodeProject = args["xcode-project"];
   if (args["xcode-scheme"]) result.xcodeScheme = args["xcode-scheme"];
@@ -457,6 +464,8 @@ function main(): void {
     buildSystem: opts.buildSystem,
     buildDir: opts.buildDir,
     buildTarget: opts.buildTarget,
+    artifactBackend: opts.artifactBackend,
+    artifactFallback: opts.artifactFallback,
     xcodeWorkspace: opts.xcodeWorkspace,
     xcodeProject: opts.xcodeProject,
     xcodeScheme: opts.xcodeScheme,

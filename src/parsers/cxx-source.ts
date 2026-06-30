@@ -158,6 +158,12 @@ function buildExternalCxxSourceCommand(
   if (config.buildTarget) {
     parts.push("--build-target", `'${shellEscape(config.buildTarget)}'`);
   }
+  if (config.artifactBackend) {
+    parts.push("--artifact-backend", `'${shellEscape(config.artifactBackend)}'`);
+  }
+  if (config.artifactFallback) {
+    parts.push("--artifact-fallback", `'${shellEscape(config.artifactFallback)}'`);
+  }
   if (config.xcodeWorkspace) {
     parts.push("--xcode-workspace", `'${shellEscape(config.xcodeWorkspace)}'`);
   }
