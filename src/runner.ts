@@ -173,6 +173,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
       return buildGomuCommand(sourceFiles, workDir);
     case "stryker-cxx":
       return buildCxxSourceCommand(sourceFiles, workDir, config);
+    case "mull":
+      return buildCxxSourceCommand(sourceFiles, workDir, config);
     default:
       throw new Error(`Unsupported mutation tool: ${config.tool}`);
   }
@@ -193,6 +195,8 @@ function parseOutput(tool: MutationTool, stdout: string, stderr: string): Mutati
     case "mutmut":
       return parseMutmut(stdout);
     case "stryker-cxx":
+      return parseCxxSource(stdout, tool);
+    case "mull":
       return parseCxxSource(stdout, tool);
     default:
       return { ...EMPTY_RESULT, tool, error: `Unknown tool: ${tool}` };
@@ -224,6 +228,7 @@ function sourceExtensions(tool: MutationTool): string[] {
     case "mutmut":
       return [".py"];
     case "stryker-cxx":
+    case "mull":
       return [".cpp", ".cc", ".cxx", ".c", ".mm", ".m", ".h", ".hpp", ".metal"];
     default:
       return [];

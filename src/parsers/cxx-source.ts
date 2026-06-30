@@ -9,7 +9,9 @@ import {
 
 /**
  * Marmorkrebs' C++/ObjC++ source mutation parser and command builder.
- * The supported CLI provider is the external stryker-cxx tool.
+ * The default provider is the external stryker-cxx tool. `mull` now uses a
+ * preference-first flow with a built-in fallback to stryker-cxx when `mull`
+ * is unavailable.
  * This module keeps a historical parser path to normalize legacy cxx-source
  * reports into Marmorkrebs result shape.
  */
@@ -61,6 +63,11 @@ interface CxxReport {
   };
 }
 
+interface CxxTargetSpec {
+  files: string[];
+  lines: string[];
+}
+
 function enginePath(): string {
   return fileURLToPath(new URL("../../engines/cxx-source/marmorkrebs-cxx.py", import.meta.url));
 }
@@ -70,8 +77,24 @@ export function buildCxxSourceCommand(
   workDir: string,
   config: MutationConfig,
 ): string {
+  if (config.tool === "mull") {
+    const mullBinary = config.mullBinary ?? "mull";
+    const fallbackBinary = config.strykerCxxBinary ?? "stryker-cxx";
+    return buildMullWithFallbackCxxSourceCommand(
+      sourceFiles,
+      workDir,
+      config,
+      mullBinary,
+      fallbackBinary,
+    );
+  }
   if (config.tool === "stryker-cxx" || config.strykerCxxBinary) {
-    return buildExternalCxxSourceCommand(sourceFiles, workDir, config);
+    return buildExternalCxxSourceCommand(
+      sourceFiles,
+      workDir,
+      config,
+      config.strykerCxxBinary ?? "stryker-cxx",
+    );
   }
 
   if (!config.buildCommand || !config.testCommand) {
@@ -79,7 +102,7 @@ export function buildCxxSourceCommand(
   }
 
   const engine = enginePath();
-  const files = sourceFiles.join(",");
+  const { files, lines } = parseScopedCxxTargets(sourceFiles);
 
   const parts = [
     "python3",
@@ -87,8 +110,11 @@ export function buildCxxSourceCommand(
     "--repo-dir",
     `'${shellEscape(workDir)}'`,
     "--files",
-    `'${shellEscape(files)}'`,
+    `'${shellEscape(files.join(","))}'`,
   ];
+  if (lines.length) {
+    parts.push("--lines", `'${shellEscape(lines.join(","))}'`);
+  }
   if (config.base) {
     parts.push("--diff-base", `'${shellEscape(config.base)}'`);
   }
@@ -111,10 +137,48 @@ export function buildCxxSourceCommand(
   return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; cat "$report"`;
 }
 
+function buildMullWithFallbackCxxSourceCommand(
+  sourceFiles: string[],
+  workDir: string,
+  config: MutationConfig,
+  mullBinary: string,
+  fallbackBinary: string,
+): string {
+  const preferred = buildExternalCxxSourceInvocation(
+    sourceFiles,
+    workDir,
+    config,
+    mullBinary,
+  );
+  const fallback = buildExternalCxxSourceInvocation(
+    sourceFiles,
+    workDir,
+    { ...config, tool: "stryker-cxx", strykerCxxBinary: fallbackBinary },
+    fallbackBinary,
+  );
+
+  return `report="$(mktemp)" && if command -v '${shellEscape(mullBinary)}' >/dev/null 2>&1; then ${preferred}; else ${fallback}; fi && cat "$report"`;
+}
+
 function buildExternalCxxSourceCommand(
   sourceFiles: string[],
   workDir: string,
   config: MutationConfig,
+  binary: string,
+): string {
+  return `report="$(mktemp)" && ${buildExternalCxxSourceInvocation(
+    sourceFiles,
+    workDir,
+    config,
+    binary,
+  )} && cat "$report"`;
+}
+
+function buildExternalCxxSourceInvocation(
+  sourceFiles: string[],
+  workDir: string,
+  config: MutationConfig,
+  binary: string,
 ): string {
   if (!config.buildCommand && !config.buildSystem) {
     throw new Error("stryker-cxx requires --build-command or --build-system");
@@ -125,7 +189,7 @@ function buildExternalCxxSourceCommand(
     );
   }
 
-  const files = sourceFiles.join(",");
+  const { files, lines } = parseScopedCxxTargets(sourceFiles);
   const timeoutSeconds =
     config.timeoutMs !== undefined
       ? Math.max(1, Math.ceil(config.timeoutMs / 1000))
@@ -134,15 +198,18 @@ function buildExternalCxxSourceCommand(
   const testCommand = config.testCommand;
 
   const parts = [
-    `'${shellEscape(config.strykerCxxBinary ?? "stryker-cxx")}'`,
+    `'${shellEscape(binary)}'`,
     "run",
     "--repo",
     `'${shellEscape(workDir)}'`,
     "--files",
-    `'${shellEscape(files)}'`,
+    `'${shellEscape(files.join(","))}'`,
     "--format",
     "json",
   ];
+  if (lines.length) {
+    parts.push("--lines", `'${shellEscape(lines.join(","))}'`);
+  }
   if (buildCommand) {
     parts.push("--build-command", `'${shellEscape(buildCommand)}'`);
   }
@@ -377,7 +444,43 @@ function buildExternalCxxSourceCommand(
   }
   parts.push("--output-format", "stryker-cxx");
 
-  return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; cat "$report"`;
+  return `${parts.join(" ")} --report "$report" 1>&2`;
+}
+
+function parseScopedCxxTargets(sourceFiles: string[]): CxxTargetSpec {
+  const files = new Set<string>();
+  const lineByFile = new Map<string, Set<string>>();
+
+  for (const raw of sourceFiles) {
+    const fileOrRange = raw.trim();
+    if (!fileOrRange) {
+      continue;
+    }
+
+    let file = fileOrRange;
+    const lastColon = fileOrRange.lastIndexOf(":");
+    if (lastColon > 0) {
+      const candidateRange = fileOrRange.slice(lastColon + 1);
+      if (/^\d+(?:-\d+)?$/.test(candidateRange)) {
+        file = fileOrRange.slice(0, lastColon);
+        const ranges = lineByFile.get(file) ?? new Set<string>();
+        ranges.add(candidateRange);
+        lineByFile.set(file, ranges);
+      }
+    }
+    if (file) {
+      files.add(file);
+    }
+  }
+
+  const lines: string[] = [];
+  for (const scoped of lineByFile.values()) {
+    lines.push(...scoped);
+  }
+  return {
+    files: [...files],
+    lines,
+  };
 }
 
 export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx"): MutationResult {

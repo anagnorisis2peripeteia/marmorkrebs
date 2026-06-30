@@ -54,10 +54,12 @@ This mode fetches the PR diff from GitHub and is useful for public PR validation
 
 ## C++ / ObjC++ / Metal local flow
 
-`stryker-cxx` mutates source files and reruns commands supplied by the caller. It
-validates the unmodified checkout first, so `--test-command` must pass before any
-mutants are executed. Keep this tightly scoped because each mutant rebuilds and
-retests the target.
+`mull` and `stryker-cxx` mutate source files and rerun commands supplied by the
+caller. `mull` is preferred when used with `--tool mull`; Marmorkrebs falls back
+to `stryker-cxx` if the `mull` binary is unavailable. It validates the
+unmodified checkout first, so `--test-command` must pass before any mutants are
+executed. Keep this tightly scoped because each mutant rebuilds and retests the
+target.
 
 This is the supported C++ gate path for both local and PR-based workflows in
 this repo. The older historical `cxx-mutant` path is not the supported
@@ -66,7 +68,7 @@ this repo. The older historical `cxx-mutant` path is not the supported
 ```bash
 marmorkrebs \
   --dir /path/to/repo \
-  --tool stryker-cxx \
+  --tool mull \
   --base origin/main \
   --build-command "ninja -C build target" \
   --check-command "clang++ -fsyntax-only src/foo.cpp" \
@@ -74,13 +76,16 @@ marmorkrebs \
   --max-mutants 25
 ```
 
-Use a specific `stryker-cxx` binary by adding:
+Use a specific `mull` binary by adding:
 
 ```bash
---stryker-cxx-bin /usr/local/bin/stryker-cxx
+--mull-bin /usr/local/bin/mull-cxx
 ```
 
-If `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) is set, Marmorkrebs will call that binary while keeping the rest of the C++ mutation options stable. New local and PR flows should use `--tool stryker-cxx`; embedded C++ source mutation is historical only and is not a supported gate path.
+If `--mull-bin` (or `MULL_CXX_BIN`) is set, Marmorkrebs prefers that binary and
+falls back to `stryker-cxx` for the fallback path. For direct fallback-only
+usage or when you already need to pin the provider, use `--tool stryker-cxx` and
+`--stryker-cxx-bin /usr/local/bin/stryker-cxx`.
 
 Marmorkrebs forwards compiled artifact selectors directly to `stryker-cxx`.
 Use them only when the selected `stryker-cxx` binary supports the requested
@@ -93,6 +98,9 @@ backend:
 Optional controls:
 
 - `--max-mutants <n>` caps the number of generated mutants for a run.
+- `--lines` is automatically forwarded from file-range inputs such as
+  `src/foo.cpp:123`; this keeps the command focused on touched lines rather than
+  whole files where possible.
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.

@@ -17,24 +17,33 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `go-mutesting` | Go |
 | `gomu` | Go |
 | `stryker-cxx` | C++/ObjC++/Metal |
+| `mull` | C++/ObjC++ (preferred when available, with `stryker-cxx` fallback) |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
-### `stryker-cxx` (C++/ObjC++/Metal)
+### `mull` + `stryker-cxx` (C++/ObjC++/Metal)
 
-Marmorkrebs treats C++ as an external Stryker-style tool. `stryker-cxx` first validates the unmodified project with the supplied build/test commands, then applies source-level operators to one source token or statement at a time. For each non-ignored mutant it recompiles the project and re-runs a targeted test command (`--test-command`). Native statuses such as `KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED` are normalized into Marmorkrebs' common result shape.
+Marmorkrebs treats C++ as an external Stryker-style toolset. `mull` is now the preferred C++ path when present; if `mull` is unavailable, Marmorkrebs falls back to `stryker-cxx` automatically.
 
-`mull` (LLVM-bitcode mutation) is not used because it needs a self-contained test binary to toggle mutants in. This engine instead recompiles per mutant, which fits projects built as a single library and driven by an external test runner. Because each mutant triggers a full rebuild, scope the run tightly — `--base <ref>` restricts it to the lines a PR changed.
+`mull`/`stryker-cxx` validate the unmodified project with the supplied build/test commands (or provider build-system synthesis), then execute one mutant at a time and normalize native outcomes (`KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED`) to Marmorkrebs' common result shape.
+
+The historical embedded C++ path recompiles per mutant against project build artifacts and still uses line-based scoping with `--base <ref>`. The current default path prioritizes `mull` first and uses `stryker-cxx` as an automatic fallback when `mull` is not available.
 
 `--build-command` is **required** for `stryker-cxx` (along with `--test-command`). The test command must pass on the unmutated checkout unless you deliberately pass `--skip-initial-test`.
 
-`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. New local and PR flows should use this provider directly; the embedded C++ source mutator is not a supported PR workflow.
+`--tool mull` invokes `mull` from `PATH` by default and automatically falls back to `stryker-cxx` if `mull` is not available. Use `--mull-bin <path>` or `MULL_CXX_BIN` to pin the executable.
+
+`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. New local and PR flows can use either `--tool mull` (preferred with fallback) or `--tool stryker-cxx` directly; the embedded C++ source mutator is not a supported PR workflow.
 
 Marmorkrebs forwards `stryker-cxx` artifact backend selectors without
 renaming them. Use `--artifact-backend compiled-executable|compiled-library|compiled-object`
 for CMake/CTest compiled-artifact execution when the selected `stryker-cxx`
 binary supports it; otherwise omit the flag and use the default
 `source-overlay` compatibility backend.
+
+File-scope syntax such as `src/foo.cpp:123` is normalized for the engine as
+`--lines 123`, and forwarded as global ranges so C++ scope stays tight to the
+actual PR-touched lines.
 
 ```
 marmorkrebs --dir <path> --tool stryker-cxx --base <ref> \
@@ -89,6 +98,7 @@ Key options:
 - `--equivalent-suppression <off|conservative|aggressive>` — forward native
   equivalent/noise suppression mode; use `off` for raw proof runs
 - `--stryker-cxx-bin <path>` — use a specific `stryker-cxx` binary
+- `--mull-bin <path>` — use a specific `mull` binary for `--tool mull`
 - `--threshold <0-1>` — compatibility alias for the `stryker-cxx` break threshold
 - `--threshold-high <0-1>`, `--threshold-low <0-1>`, `--threshold-break <0-1>` — forward Stryker-style score bands to `stryker-cxx`
 - `--timeout <ms>` — mutation run timeout (default 480000)

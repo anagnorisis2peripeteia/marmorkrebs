@@ -217,6 +217,43 @@ describe("parseCxxSource", () => {
     assert.ok(!command.includes("--test-command"));
   });
 
+  it("forwards file line-suffixes as --lines for stryker-cxx", () => {
+    const command = buildCxxSourceCommand(
+      ["src/foo.cpp:12", "src/foo.cpp:28-33", "src/bar.cpp:7"],
+      "/repo",
+      {
+        tool: "stryker-cxx",
+        buildCommand: "ninja -C build target",
+        testCommand: "./target_test",
+        base: "origin/main",
+      },
+    );
+
+    assert.ok(command.includes("--files 'src/foo.cpp,src/bar.cpp'"));
+    assert.ok(command.includes("--lines '12,28-33,7'"));
+    assert.ok(command.includes("--base 'origin/main'"));
+  });
+
+  it("builds mull command with stryker-cxx fallback when needed", () => {
+    const command = buildCxxSourceCommand(
+      ["src/foo.cpp:12", "src/bar.cpp"],
+      "/repo",
+      {
+        tool: "mull",
+        buildCommand: "ninja -C build target",
+        testCommand: "./target_test",
+        mullBinary: "mull-cxx",
+        strykerCxxBinary: "/usr/local/bin/stryker-cxx",
+      },
+    );
+
+    assert.ok(command.includes("if command -v 'mull-cxx' >/dev/null 2>&1"));
+    assert.ok(command.includes("'mull-cxx' run"));
+    assert.ok(command.includes("'/usr/local/bin/stryker-cxx' run"));
+    assert.ok(command.includes("--files 'src/foo.cpp,src/bar.cpp'"));
+    assert.ok(command.includes("--lines '12'"));
+  });
+
   it("parses standalone stryker-cxx report v1", () => {
     const report = {
       schemaVersion: "stryker-cxx.report.v1",

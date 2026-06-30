@@ -10,6 +10,7 @@ const TOOLS: ReadonlySet<string> = new Set([
   "stryker",
   "stryker-net",
   "stryker-cxx",
+  "mull",
   "go-mutesting",
   "gomu",
   "cargo-mutants",
@@ -28,7 +29,7 @@ Options:
   --dir <path>              Local checkout directory
   --repo <owner/repo>       GitHub repository (requires gh CLI)
   --pr <number>             PR number (used with --repo to get changed files)
-  --tool <tool>             Mutation tool: stryker | stryker-net | stryker-cxx | go-mutesting | gomu | cargo-mutants | mutmut
+  --tool <tool>             Mutation tool: stryker | stryker-net | stryker-cxx | mull | go-mutesting | gomu | cargo-mutants | mutmut
   --changed-files <files>   Comma-separated list of changed files
   --base <ref>              Derive changed files from the local git diff vs <ref>
                             (branch commits since merge-base + staged/unstaged +
@@ -119,6 +120,7 @@ Options:
                             stryker-cxx only: env var used for upload bearer auth
   --dashboard-auth-header <name>
                             stryker-cxx only: upload auth header name
+  --mull-bin <path>         Optional mull executable (default: mull)
   --stryker-cxx-bin <path>  Optional stryker-cxx executable (default: stryker-cxx)
                             (or set STRYKER_CXX_BIN)
 
@@ -226,6 +228,7 @@ function parseCliArgs(argv: string[]): {
   dashboardAuthTokenEnv?: string;
   dashboardAuthHeader?: string;
   strykerCxxBinary?: string;
+  mullBinary?: string;
   leaseId?: string;
   skipSync?: boolean;
   remoteDir?: string;
@@ -381,6 +384,11 @@ function parseCliArgs(argv: string[]): {
   } else if (process.env.STRYKER_CXX_BIN) {
     result.strykerCxxBinary = process.env.STRYKER_CXX_BIN;
   }
+  if (args["mull-bin"]) {
+    result.mullBinary = args["mull-bin"];
+  } else if (process.env.MULL_CXX_BIN) {
+    result.mullBinary = process.env.MULL_CXX_BIN;
+  }
 
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
@@ -534,6 +542,7 @@ function main(): void {
     dashboardAuthTokenEnv: opts.dashboardAuthTokenEnv,
     dashboardAuthHeader: opts.dashboardAuthHeader,
     strykerCxxBinary: opts.strykerCxxBinary,
+    mullBinary: opts.mullBinary,
     leaseId: opts.leaseId,
     skipSync: opts.skipSync,
     remoteDir: opts.remoteDir,

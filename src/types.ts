@@ -2,6 +2,7 @@ export type MutationTool =
   | "stryker"
   | "stryker-net"
   | "stryker-cxx"
+  | "mull"
   | "go-mutesting"
   | "cargo-mutants"
   | "mutmut"
@@ -105,6 +106,7 @@ export interface MutationConfig {
   dashboardAuthTokenEnv?: string;
   dashboardAuthHeader?: string;
   strykerCxxBinary?: string;
+  mullBinary?: string;
   leaseId?: string;
   skipSync?: boolean;
   remoteDir?: string;
