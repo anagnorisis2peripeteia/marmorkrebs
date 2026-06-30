@@ -17,7 +17,7 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `go-mutesting` | Go |
 | `gomu` | Go |
 | `stryker-cxx` | C++/ObjC++/Metal |
-| `mull` | C++/ObjC++ (preferred when available, with `stryker-cxx` fallback) |
+| `mull` | C++/ObjC++ (optional; use when you want the Mull path) |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
@@ -33,7 +33,7 @@ For C++-only workflows where you prefer the lighter command path, `--tool mull` 
 
 `--tool mull` invokes `mull` from `PATH` by default and automatically falls back to `stryker-cxx` if `mull` is not available. Use `--mull-bin <path>` or `MULL_CXX_BIN` to pin the executable.
 
-`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. New local and PR flows can use either `--tool mull` (preferred with fallback) or `--tool stryker-cxx` directly; the embedded C++ source mutator is not a supported PR workflow.
+`--tool stryker-cxx` invokes `stryker-cxx` from `PATH` by default. Use `--stryker-cxx-bin <path>` or `STRYKER_CXX_BIN` when Marmorkrebs should call a specific checkout or installed binary. Local and PR flows use `--tool stryker-cxx` as the standard path for C++/ObjC++/Metal; `--tool mull` is supported as an optional C++-only alternative.
 
 Marmorkrebs forwards `stryker-cxx` artifact backend selectors without
 renaming them. Use `--artifact-backend compiled-executable|compiled-library|compiled-object`

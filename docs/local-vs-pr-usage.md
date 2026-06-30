@@ -56,8 +56,7 @@ This mode fetches the PR diff from GitHub and is useful for public PR validation
 
 `stryker-cxx` is the canonical path for C++/ObjC++/Metal. It validates the
 unmodified checkout first, so `--test-command` must pass before any mutants are
-executed. If you explicitly use `--tool mull`, Marmorkrebs prefers `mull` for C++
-and falls back to `stryker-cxx` when `mull` is unavailable.
+executed. Use `--tool mull` only for C++-only runs.
 
 This is the supported C++ gate path for both local and PR-based workflows in
 this repo. For Metal-enabled projects, use `--tool stryker-cxx`.
@@ -80,9 +79,9 @@ Use a specific `mull` or `stryker-cxx` binary by adding:
 --stryker-cxx-bin /usr/local/bin/stryker-cxx
 ```
 
-If `--mull-bin` (or `MULL_CXX_BIN`) is set, Marmorkrebs prefers that C++-only
-binary and falls back to `stryker-cxx` for the fallback path. For direct
-Metal-capable invocation, use `--tool stryker-cxx` and `--stryker-cxx-bin`.
+If `--mull-bin` (or `MULL_CXX_BIN`) is set, Marmorkrebs uses that C++-only
+binary. For Metal-capable invocation, use `--tool stryker-cxx` and
+`--stryker-cxx-bin`.
 
 Marmorkrebs forwards compiled artifact selectors directly to `stryker-cxx`.
 Use them only when the selected `stryker-cxx` binary supports the requested
