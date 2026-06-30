@@ -52,23 +52,20 @@ marmorkrebs \
 
 This mode fetches the PR diff from GitHub and is useful for public PR validation, review-bot follow-up, or reproducing a maintainer-visible mutation gate. It is not required for the local gate.
 
-## C++ / ObjC++ / Metal local flow
+## C++ / ObjC++ / Metal flow
 
-`mull` and `stryker-cxx` mutate source files and rerun commands supplied by the
-caller. `mull` is preferred when used with `--tool mull`; Marmorkrebs falls back
-to `stryker-cxx` if the `mull` binary is unavailable. It validates the
+`stryker-cxx` is the canonical path for C++/ObjC++/Metal. It validates the
 unmodified checkout first, so `--test-command` must pass before any mutants are
-executed. Keep this tightly scoped because each mutant rebuilds and retests the
-target.
+executed. If you explicitly use `--tool mull`, Marmorkrebs prefers `mull` for C++
+and falls back to `stryker-cxx` when `mull` is unavailable.
 
 This is the supported C++ gate path for both local and PR-based workflows in
-this repo. The older historical `cxx-mutant` path is not the supported
-`marmorkrebs --tool` PR flow.
+this repo. For Metal-enabled projects, use `--tool stryker-cxx`.
 
 ```bash
 marmorkrebs \
   --dir /path/to/repo \
-  --tool mull \
+  --tool stryker-cxx \
   --base origin/main \
   --build-command "ninja -C build target" \
   --check-command "clang++ -fsyntax-only src/foo.cpp" \
@@ -76,16 +73,16 @@ marmorkrebs \
   --max-mutants 25
 ```
 
-Use a specific `mull` binary by adding:
+Use a specific `mull` or `stryker-cxx` binary by adding:
 
 ```bash
 --mull-bin /usr/local/bin/mull-cxx
+--stryker-cxx-bin /usr/local/bin/stryker-cxx
 ```
 
-If `--mull-bin` (or `MULL_CXX_BIN`) is set, Marmorkrebs prefers that binary and
-falls back to `stryker-cxx` for the fallback path. For direct fallback-only
-usage or when you already need to pin the provider, use `--tool stryker-cxx` and
-`--stryker-cxx-bin /usr/local/bin/stryker-cxx`.
+If `--mull-bin` (or `MULL_CXX_BIN`) is set, Marmorkrebs prefers that C++-only
+binary and falls back to `stryker-cxx` for the fallback path. For direct
+Metal-capable invocation, use `--tool stryker-cxx` and `--stryker-cxx-bin`.
 
 Marmorkrebs forwards compiled artifact selectors directly to `stryker-cxx`.
 Use them only when the selected `stryker-cxx` binary supports the requested

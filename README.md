@@ -21,15 +21,15 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
-### `mull` + `stryker-cxx` (C++/ObjC++/Metal)
+### C++ / ObjC++ / Metal
 
-Marmorkrebs treats C++ as an external Stryker-style toolset. `mull` is now the preferred C++ path when present; if `mull` is unavailable, Marmorkrebs falls back to `stryker-cxx` automatically.
+Marmorkrebs delegates C++/ObjC++/Metal mutation to external engines.
 
-`mull`/`stryker-cxx` validate the unmodified project with the supplied build/test commands (or provider build-system synthesis), then execute one mutant at a time and normalize native outcomes (`KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, and `IGNORED`) to Marmorkrebs' common result shape.
+Use `--tool stryker-cxx` as the canonical path for C++/ObjC++/Metal. It validates the unmodified project, runs scoped mutants, and normalizes native outcomes (`KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, `IGNORED`) to Marmorkrebs' common result shape.
 
-The historical embedded C++ path recompiles per mutant against project build artifacts and still uses line-based scoping with `--base <ref>`. The current default path prioritizes `mull` first and uses `stryker-cxx` as an automatic fallback when `mull` is not available.
+For C++-only workflows where you prefer the lighter command path, `--tool mull` is available and automatically falls back to `stryker-cxx` when `mull` is not available.
 
-`--build-command` is **required** for `stryker-cxx` (along with `--test-command`). The test command must pass on the unmutated checkout unless you deliberately pass `--skip-initial-test`.
+`--build-command` is required for `stryker-cxx` (along with `--test-command`) unless using `--build-system`. The test command must pass on the unmutated checkout unless you deliberately pass `--skip-initial-test`.
 
 `--tool mull` invokes `mull` from `PATH` by default and automatically falls back to `stryker-cxx` if `mull` is not available. Use `--mull-bin <path>` or `MULL_CXX_BIN` to pin the executable.
 
