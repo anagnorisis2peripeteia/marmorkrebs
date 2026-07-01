@@ -88,6 +88,9 @@ Mutation options:
 - `--execution-mode source-overlay|mutant-switch`: choose the native execution
   model. Marmorkrebs forwards this unchanged and preserves provider fallback
   evidence from `stryker-cxx.report.v1`.
+- `--execution-backend auto|source-overlay|mutant-switch|compiled-artifact|llvm-switch`:
+  choose or document the native backend path. Marmorkrebs forwards this unchanged
+  and preserves requested/actual backend plus fallback reason in provider metadata.
 - `--equivalent-suppression off|conservative|aggressive`: choose native
   equivalent/noise suppression mode; `conservative` is the standalone default
   and covers generated-code markers, duplicate logical/bitwise operands,
@@ -97,8 +100,9 @@ Mutation options:
 - `--skip-initial-test`: skip the unmodified build/test lifecycle for advanced or legacy flows.
 - `--check-command`: run a compile/type-check command after mutated build and before tests.
 - `--skip-tests`: run build/check only; viable mutants are reported as survivors.
-- `--coverage-file`, `--coverage-provider`: ingest simple JSON, `llvm-cov
-  export` JSON, or LCOV data and mark uncovered mutants as `NO_COVERAGE`.
+- `--coverage-file`, `--coverage-analysis`, `--coverage-provider`: ingest
+  simple JSON, `llvm-cov export` JSON, or LCOV data, forward the
+  Stryker-style coverage mode, and mark uncovered mutants as `NO_COVERAGE`.
 - `--coverage-test-command-template`: narrow per-mutant test commands from
   supplied test-level coverage mappings.
 - `--coverage-helper-command-template`, `--coverage-helper-tests`: generate
@@ -504,11 +508,11 @@ Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
 line suffixes as `--lines`, checker, coverage, test-level coverage selection,
 baseline-cache policy, plugin, resource-control, build/test adapter,
 framework-discovery, timeout-calibration, threshold-band, artifact-backend,
-artifact-fallback, execution-mode, and equivalent-suppression options, treats failed
+artifact-fallback, execution-mode, execution-backend, and equivalent-suppression options, treats failed
 `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser while preserving provider
-execution, requested/actual artifact backend, fallback, scheduler, lifecycle,
-artifact-placement, mutant-switch, and project-analysis metadata.
+execution, requested/actual execution backend, requested/actual artifact backend, fallback, scheduler, lifecycle,
+artifact-placement, mutant-switch/llvm-switch, source-precision, and project-analysis/build-graph metadata.
 
 Marmorkrebs result mapping:
 

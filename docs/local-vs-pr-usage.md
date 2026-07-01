@@ -111,12 +111,16 @@ Optional controls:
   `stryker-cxx` execution model selector. Use `mutant-switch` when the selected
   provider can build guarded artifacts; fallback evidence remains available in
   the normalized provider metadata.
+- `--execution-backend <auto|source-overlay|mutant-switch|compiled-artifact|llvm-switch>` forwards the native
+  `stryker-cxx` backend selector. `llvm-switch` is experimental: it can use the
+  guarded-source single-compile path when `stryker-cxx` sees compile-database or
+  CMake/CTest ownership evidence, and otherwise reports explicit fallback.
 - `--equivalent-suppression <off|conservative|aggressive>` forwards native
   equivalent/noise suppression; use `off` when proof requires every discovered
   mutant to execute.
 - `--check-command <cmd>` runs an additional compile/type-check phase before tests.
 - `--skip-tests` runs build/check only and treats viable mutants as survivors.
-- `--coverage-file <path>` supplies simple JSON, `llvm-cov export` JSON, or LCOV data so uncovered mutants are reported as `NO_COVERAGE`; with JSON `coveredTests`/`testsByLine` data or helper-generated per-test coverage from `--coverage-helper-command-template <cmd>` plus `--coverage-helper-tests <tests>`, `--coverage-test-command-template <cmd>` can select per-mutant test commands via `{tests}`, `{tests_csv}`, `{tests_space}`, or `{first_test}`.
+- `--coverage-file <path>` supplies simple JSON, `llvm-cov export` JSON, or LCOV data so uncovered mutants are reported as `NO_COVERAGE`; `--coverage-analysis <off|all|perTest|perTestInIsolation>` forwards the Stryker-style coverage mode. With JSON `coveredTests`/`testsByLine` data or helper-generated per-test coverage from `--coverage-helper-command-template <cmd>` plus `--coverage-helper-tests <tests>`, `--coverage-test-command-template <cmd>` can select per-mutant test commands via `{tests}`, `{tests_csv}`, `{tests_space}`, or `{first_test}` when the selected mode supports per-test selection.
 - `--incremental` with `--baseline-file <path>` reuses compatible previous mutant results; add `--baseline-max-age-days <n>` and `--baseline-branch <name>` when cache reuse must be bounded by freshness or branch lifecycle.
 - `--batch-mutants --batch-size <n>` batches compatible mutants in isolated worktrees and splits failed batches for attribution.
 - `--worktree-mode <copy|git-worktree>` selects isolated worker mode for batching or retained debug workers.
@@ -148,9 +152,9 @@ A successful run exits zero and writes a `MutationResult` JSON object to stdout.
 - `dryRun`: optional `stryker-cxx` initial build/test validation result.
 - `baseline`: optional `stryker-cxx` cache hit/miss/write metadata.
 - `provider`: optional provider-native metadata from `stryker-cxx.report.v1`,
-  including execution mode, requested/actual artifact backend, fallback reason,
-  scheduler, lifecycle, artifact placement, mutant-switch, and project-analysis
-  evidence when present.
+  including execution mode, requested/actual execution backend, requested/actual artifact backend, fallback reason,
+  source precision, scheduler, lifecycle, artifact placement, mutant-switch, and
+  project-analysis/build-graph evidence when present.
 - `totalMutants`: number of mutants reported for the scoped run.
 - `ignored`: mutants suppressed by Stryker-style ignore comments and excluded from score.
 - `noCoverage`: mutants skipped because supplied coverage data did not cover their line, plus legacy non-viable C++ counts normalized into Marmorkrebs' common shape.

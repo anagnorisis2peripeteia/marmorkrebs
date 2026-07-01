@@ -98,8 +98,10 @@ describe("parseCxxSource", () => {
       thresholdBreak: 0.5,
       mode: "clang-ast",
       executionMode: "mutant-switch",
+      executionBackend: "mutant-switch",
       equivalentSuppression: "off",
       coverageFile: "coverage.json",
+      coverageAnalysis: "perTest",
       coverageProvider: "llvm-cov",
       coverageTestCommandTemplate: "pytest -k {tests_space}",
       coverageHelperCommandTemplate: "run-one-test {test} --coverage-out {coverage_file}",
@@ -170,8 +172,10 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--threshold-break 0.5"));
     assert.ok(command.includes("--mode 'clang-ast'"));
     assert.ok(command.includes("--execution-mode 'mutant-switch'"));
+    assert.ok(command.includes("--execution-backend 'mutant-switch'"));
     assert.ok(command.includes("--equivalent-suppression 'off'"));
     assert.ok(command.includes("--coverage-file 'coverage.json'"));
+    assert.ok(command.includes("--coverage-analysis 'perTest'"));
     assert.ok(command.includes("--coverage-provider 'llvm-cov'"));
     assert.ok(command.includes("--coverage-test-command-template 'pytest -k {tests_space}'"));
     assert.ok(
@@ -283,6 +287,12 @@ describe("parseCxxSource", () => {
       execution: {
         executionMode: "mutant-switch",
         requestedExecutionMode: "mutant-switch",
+        analysis: {
+          sourcePrecision: {
+            schemaVersion: "stryker-cxx.source-precision.v1",
+            totalMutants: 5,
+          },
+        },
         artifactBackend: "source-overlay",
         requestedArtifactBackend: "compiled-executable",
         artifactFallback: "source-overlay",
@@ -296,6 +306,10 @@ describe("parseCxxSource", () => {
           enabled: true,
           runtimeGuardCount: 1,
         },
+        llvmSwitch: {
+          enabled: true,
+          implementation: "guarded-source-switch",
+        },
         resourceIsolation: {
           worktreeMode: "copy",
           environmentKeys: ["SECRET_TOKEN"],
@@ -304,7 +318,13 @@ describe("parseCxxSource", () => {
       },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
       artifactPlacement: { mode: "mutant-switch" },
-      projectAnalysis: { confidence: "high" },
+      projectAnalysis: {
+        confidence: "high",
+        buildGraph: {
+          schemaVersion: "stryker-cxx.build-graph.v1",
+          ownershipModel: "compile-database",
+        },
+      },
       mutants: [
         {
           id: "aten/src/Reduce.mm:42:12:ConditionalBoundary:abc123",
@@ -370,6 +390,16 @@ describe("parseCxxSource", () => {
       schemaVersion: "stryker-cxx.report.v1",
       executionMode: "mutant-switch",
       requestedExecutionMode: "mutant-switch",
+      analysis: {
+        sourcePrecision: {
+          schemaVersion: "stryker-cxx.source-precision.v1",
+          totalMutants: 5,
+        },
+      },
+      sourcePrecision: {
+        schemaVersion: "stryker-cxx.source-precision.v1",
+        totalMutants: 5,
+      },
       artifactBackend: "source-overlay",
       requestedArtifactBackend: "compiled-executable",
       artifactFallback: "source-overlay",
@@ -383,9 +413,19 @@ describe("parseCxxSource", () => {
         enabled: true,
         runtimeGuardCount: 1,
       },
+      llvmSwitch: {
+        enabled: true,
+        implementation: "guarded-source-switch",
+      },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
       artifactPlacement: { mode: "mutant-switch" },
-      projectAnalysis: { confidence: "high" },
+      projectAnalysis: {
+        confidence: "high",
+        buildGraph: {
+          schemaVersion: "stryker-cxx.build-graph.v1",
+          ownershipModel: "compile-database",
+        },
+      },
     });
     assert.equal(result.survivingMutants.length, 1);
     assert.equal(result.survivingMutants[0].file, "aten/src/Reduce.mm");

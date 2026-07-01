@@ -61,12 +61,17 @@ interface CxxReport {
   execution?: {
     executionMode?: string;
     requestedExecutionMode?: string;
+    executionBackend?: string;
+    requestedExecutionBackend?: string;
+    executionBackendFallbackReason?: string;
+    analysis?: Record<string, unknown>;
     artifactBackend?: string;
     requestedArtifactBackend?: string;
     artifactFallback?: string;
     artifactFallbackReason?: string;
     testScheduler?: Record<string, unknown>;
     mutantSwitch?: Record<string, unknown>;
+    llvmSwitch?: Record<string, unknown>;
     resourceIsolation?: Record<string, unknown>;
   };
   lifecycle?: Record<string, unknown>;
@@ -302,6 +307,9 @@ function buildExternalCxxSourceInvocation(
   if (config.executionMode) {
     parts.push("--execution-mode", `'${shellEscape(config.executionMode)}'`);
   }
+  if (config.executionBackend) {
+    parts.push("--execution-backend", `'${shellEscape(config.executionBackend)}'`);
+  }
   if (config.equivalentSuppression) {
     parts.push("--equivalent-suppression", `'${shellEscape(config.equivalentSuppression)}'`);
   }
@@ -392,6 +400,9 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.coverageFile) {
     parts.push("--coverage-file", `'${shellEscape(config.coverageFile)}'`);
+  }
+  if (config.coverageAnalysis) {
+    parts.push("--coverage-analysis", `'${shellEscape(config.coverageAnalysis)}'`);
   }
   if (config.coverageProvider) {
     parts.push("--coverage-provider", `'${shellEscape(config.coverageProvider)}'`);
@@ -582,12 +593,32 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
       schemaVersion: report.schemaVersion,
       executionMode: report.execution?.executionMode,
       requestedExecutionMode: report.execution?.requestedExecutionMode,
+      ...(report.execution?.executionBackend !== undefined
+        ? { executionBackend: report.execution.executionBackend }
+        : {}),
+      ...(report.execution?.requestedExecutionBackend !== undefined
+        ? { requestedExecutionBackend: report.execution.requestedExecutionBackend }
+        : {}),
+      ...(report.execution?.executionBackendFallbackReason !== undefined
+        ? { executionBackendFallbackReason: report.execution.executionBackendFallbackReason }
+        : {}),
+      ...(report.execution?.analysis !== undefined
+        ? { analysis: report.execution.analysis }
+        : {}),
+      ...(typeof report.execution?.analysis === "object" &&
+      report.execution?.analysis !== null &&
+      "sourcePrecision" in report.execution.analysis
+        ? { sourcePrecision: report.execution.analysis.sourcePrecision }
+        : {}),
       artifactBackend: report.execution?.artifactBackend,
       requestedArtifactBackend: report.execution?.requestedArtifactBackend,
       artifactFallback: report.execution?.artifactFallback,
       artifactFallbackReason: report.execution?.artifactFallbackReason,
       testScheduler: report.execution?.testScheduler,
       mutantSwitch: report.execution?.mutantSwitch,
+      ...(report.execution?.llvmSwitch !== undefined
+        ? { llvmSwitch: report.execution.llvmSwitch }
+        : {}),
       lifecycle: report.lifecycle,
       artifactPlacement: report.artifactPlacement,
       projectAnalysis: report.projectAnalysis,

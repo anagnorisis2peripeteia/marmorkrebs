@@ -77,7 +77,7 @@ Key options:
 - `--build-command <cmd>` — build run between mutants (**required** for `stryker-cxx`)
 - `--check-command <cmd>` — optional compile/type-check phase run before tests for each C++ mutant
 - `--skip-tests` — run `stryker-cxx` build/check phases only and mark viable mutants as survivors
-- `--coverage-file <path>` / `--coverage-provider <id>` / `--coverage-test-command-template <cmd>` / `--coverage-helper-command-template <cmd>` / `--coverage-helper-tests <tests>` — forward coverage data so `stryker-cxx` can mark uncovered mutants as `NO_COVERAGE`; when coverage includes covering tests or helper-generated per-test coverage, select per-mutant test commands
+- `--coverage-file <path>` / `--coverage-analysis <off|all|perTest|perTestInIsolation>` / `--coverage-provider <id>` / `--coverage-test-command-template <cmd>` / `--coverage-helper-command-template <cmd>` / `--coverage-helper-tests <tests>` — forward coverage data so `stryker-cxx` can mark uncovered mutants as `NO_COVERAGE`; when coverage includes covering tests or helper-generated per-test coverage and the selected mode supports it, select per-mutant test commands
 - `--incremental`, `--baseline-file <path>`, `--baseline-max-age-days <n>`, `--baseline-branch <name>`, `--write-baseline <path>`, `--clear-baseline` — forward baseline-cache and reuse-policy controls to `stryker-cxx`
 - `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` / `--artifact-path <path>` / `--artifact-fallback <none|source-overlay>` — forward `stryker-cxx` artifact backend selection. Marmorkrebs does not emulate compiled artifacts; it preserves the provider's requested/actual backend and fallback evidence in normalized output.
 - `--batch-mutants`, `--batch-size <n>`, `--worktree-mode <inplace|copy|git-worktree>` — forward opt-in batching controls to `stryker-cxx`; batching uses conservative proximity/source-structure heuristics, and backend-specific constraints are enforced by the selected `stryker-cxx` binary
@@ -105,8 +105,8 @@ Key options:
   `xcodebuild test-without-building` path
 - `--plugin`, `--plugin-dir`, `--reporter` — forward local plugin manifests, provider hooks, and reporter selection to `stryker-cxx`
 - `--dashboard-export`, `--dashboard-upload-url`, `--dashboard-upload-retries`, `--dashboard-upload-retry-delay-ms`, `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`, `--dashboard-build-url` — forward dashboard export/upload, retry policy, and CI provenance controls to `stryker-cxx`
-- `--execution-mode <source-overlay|mutant-switch>` — forward the native
-  `stryker-cxx` execution model selector and preserve provider fallback
+- `--execution-mode <source-overlay|mutant-switch>` / `--execution-backend <auto|source-overlay|mutant-switch|compiled-artifact|llvm-switch>` — forward the native
+  `stryker-cxx` execution model/backend selectors and preserve provider fallback
   evidence in the normalized result
 - `--equivalent-suppression <off|conservative|aggressive>` — forward native
   equivalent/noise suppression mode; use `off` for raw proof runs

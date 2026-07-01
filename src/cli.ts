@@ -71,6 +71,7 @@ Options:
   --dry-run-only            stryker-cxx only: validate unmutated build/test and stop
   --skip-tests              stryker-cxx only: run build/check phases without tests
   --coverage-file <path>    stryker-cxx only: llvm-cov JSON, simple JSON, or LCOV coverage file
+  --coverage-analysis <m>   stryker-cxx only: off | all | perTest | perTestInIsolation
   --coverage-provider <id>  stryker-cxx only: label for supplied coverage data
   --coverage-test-command-template <cmd>
                             stryker-cxx only: per-mutant test command template using coverage coveredTests
@@ -105,6 +106,7 @@ Options:
   --mutators <names>        stryker-cxx only: comma-separated mutator names
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
   --execution-mode <mode>   stryker-cxx only: source-overlay | mutant-switch
+  --execution-backend <m>   stryker-cxx only: auto | source-overlay | mutant-switch | compiled-artifact | llvm-switch
   --equivalent-suppression <mode>
                             stryker-cxx only: off | conservative | aggressive
   --plugin <path>           stryker-cxx only: plugin manifest path, repeatable via comma
@@ -198,6 +200,7 @@ function parseCliArgs(argv: string[]): {
   dryRunOnly?: boolean;
   skipTests?: boolean;
   coverageFile?: string;
+  coverageAnalysis?: string;
   coverageProvider?: string;
   coverageTestCommandTemplate?: string;
   coverageHelperCommandTemplate?: string;
@@ -224,6 +227,7 @@ function parseCliArgs(argv: string[]): {
   mutators?: string;
   mode?: string;
   executionMode?: string;
+  executionBackend?: string;
   equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
@@ -343,6 +347,7 @@ function parseCliArgs(argv: string[]): {
   }
   const coverageHelperTests = splitCommaList(args["coverage-helper-tests"]);
   if (coverageHelperTests) result.coverageHelperTests = coverageHelperTests;
+  if (args["coverage-analysis"]) result.coverageAnalysis = args["coverage-analysis"];
   if ("incremental" in args) result.incremental = true;
   if (args["baseline-file"]) result.baselineFile = args["baseline-file"];
   if (args["baseline-max-age-days"]) result.baselineMaxAgeDays = parseInt(args["baseline-max-age-days"], 10);
@@ -372,6 +377,7 @@ function parseCliArgs(argv: string[]): {
   if (args.mutators) result.mutators = args.mutators;
   if (args.mode) result.mode = args.mode;
   if (args["execution-mode"]) result.executionMode = args["execution-mode"];
+  if (args["execution-backend"]) result.executionBackend = args["execution-backend"];
   if (args["equivalent-suppression"]) {
     result.equivalentSuppression = args["equivalent-suppression"];
   }
@@ -552,6 +558,7 @@ function main(): void {
     mutators: opts.mutators,
     mode: opts.mode,
     executionMode: opts.executionMode,
+    executionBackend: opts.executionBackend,
     equivalentSuppression: opts.equivalentSuppression,
     plugins: opts.plugins,
     pluginDirs: opts.pluginDirs,

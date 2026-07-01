@@ -67,6 +67,7 @@ export interface MutationConfig {
   dryRunOnly?: boolean;
   skipTests?: boolean;
   coverageFile?: string;
+  coverageAnalysis?: string;
   coverageProvider?: string;
   coverageTestCommandTemplate?: string;
   coverageHelperCommandTemplate?: string;
@@ -94,6 +95,7 @@ export interface MutationConfig {
   mutators?: string;
   mode?: string;
   executionMode?: string;
+  executionBackend?: string;
   equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
