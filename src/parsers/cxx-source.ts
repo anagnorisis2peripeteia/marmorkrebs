@@ -59,6 +59,7 @@ interface CxxReport {
     failureReason?: string;
   };
   coverage?: Record<string, unknown>;
+  baseline?: Record<string, unknown>;
   execution?: {
     mutationLevel?: string;
     enabledMutators?: string[];
@@ -658,6 +659,9 @@ export function parseCxxSource(
       testScheduler: report.execution?.testScheduler,
       ...(report.coverage !== undefined
         ? { coverage: report.coverage }
+        : {}),
+      ...(report.baseline !== undefined
+        ? { baseline: report.baseline }
         : {}),
       mutantSwitch: report.execution?.mutantSwitch,
       ...(report.execution?.llvmSwitch !== undefined

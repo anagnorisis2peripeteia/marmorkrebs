@@ -294,6 +294,11 @@ describe("parseCxxSource", () => {
         analysis: "perTest",
         testSelectedMutants: 3,
       },
+      baseline: {
+        enabled: true,
+        cacheHits: 1,
+        cacheWrites: 2,
+      },
       execution: {
         mutationLevel: "Advanced",
         enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
@@ -445,6 +450,11 @@ describe("parseCxxSource", () => {
         enabled: true,
         analysis: "perTest",
         testSelectedMutants: 3,
+      },
+      baseline: {
+        enabled: true,
+        cacheHits: 1,
+        cacheWrites: 2,
       },
       mutantSwitch: {
         enabled: true,
