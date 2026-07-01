@@ -518,7 +518,7 @@ artifact-fallback, execution-mode, execution-backend, and equivalent-suppression
 `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser while preserving provider
 execution, mutation-level/enabled-mutator, requested/actual execution backend,
-requested/actual artifact backend, fallback, scheduler, lifecycle,
+requested/actual artifact backend, fallback, coverage, scheduler, lifecycle,
 artifact-placement, mutant-switch/llvm-switch, compile-pruning,
 source-precision, reporter/dashboard, parity, and project-analysis/build-graph
 metadata.

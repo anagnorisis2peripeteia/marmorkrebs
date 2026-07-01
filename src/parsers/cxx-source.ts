@@ -58,6 +58,7 @@ interface CxxReport {
     status: string;
     failureReason?: string;
   };
+  coverage?: Record<string, unknown>;
   execution?: {
     mutationLevel?: string;
     enabledMutators?: string[];
@@ -655,6 +656,9 @@ export function parseCxxSource(
       artifactFallback: report.execution?.artifactFallback,
       artifactFallbackReason: report.execution?.artifactFallbackReason,
       testScheduler: report.execution?.testScheduler,
+      ...(report.coverage !== undefined
+        ? { coverage: report.coverage }
+        : {}),
       mutantSwitch: report.execution?.mutantSwitch,
       ...(report.execution?.llvmSwitch !== undefined
         ? { llvmSwitch: report.execution.llvmSwitch }

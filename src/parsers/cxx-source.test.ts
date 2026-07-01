@@ -289,6 +289,11 @@ describe("parseCxxSource", () => {
       score: 0.5,
       thresholds: { high: 0.9, low: 0.7, break: 0.5, status: "low" },
       dryRun: { status: "PASSED" },
+      coverage: {
+        enabled: true,
+        analysis: "perTest",
+        testSelectedMutants: 3,
+      },
       execution: {
         mutationLevel: "Advanced",
         enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
@@ -435,6 +440,11 @@ describe("parseCxxSource", () => {
       testScheduler: {
         schemaVersion: "stryker-cxx.test-scheduler.v1",
         sessions: 1,
+      },
+      coverage: {
+        enabled: true,
+        analysis: "perTest",
+        testSelectedMutants: 3,
       },
       mutantSwitch: {
         enabled: true,
