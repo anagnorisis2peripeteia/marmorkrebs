@@ -52,6 +52,9 @@ marmorkrebs \
 
 This mode fetches the PR diff from GitHub and is useful for public PR validation, review-bot follow-up, or reproducing a maintainer-visible mutation gate. It is not required for the local gate.
 
+For Stryker/Stryker.NET terminology, `--since <ref>` is accepted as an alias for
+the local `--base <ref>` flow and is forwarded to `stryker-cxx`.
+
 ## C++ / ObjC++ / Metal flow
 
 `stryker-cxx` is the canonical path for C++/ObjC++/Metal. It validates the
@@ -106,6 +109,8 @@ Optional controls:
   whole files where possible.
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
+- `--mutation-level <Standard|Advanced|Complete>` forwards Stryker-style default
+  mutator breadth; explicit `--mutators` remains the exact PR-scope override.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.
 - `--execution-mode <source-overlay|mutant-switch>` forwards the native
   `stryker-cxx` execution model selector. Use `mutant-switch` when the selected
@@ -153,7 +158,8 @@ A successful run exits zero and writes a `MutationResult` JSON object to stdout.
 - `baseline`: optional `stryker-cxx` cache hit/miss/write metadata.
 - `provider`: optional provider-native metadata from `stryker-cxx.report.v1`,
   including execution mode, requested/actual execution backend, requested/actual artifact backend, fallback reason,
-  source precision, scheduler, lifecycle, artifact placement, mutant-switch, and
+  mutation level, enabled mutators, source precision, scheduler, lifecycle,
+  artifact placement, mutant-switch, parity/eight-gap evidence, and
   project-analysis/build-graph evidence when present.
 - `totalMutants`: number of mutants reported for the scoped run.
 - `ignored`: mutants suppressed by Stryker-style ignore comments and excluded from score.

@@ -81,6 +81,8 @@ Scoping options:
 Mutation options:
 
 - `--mutators <names>`: comma-separated mutator list.
+- `--mutation-level Standard|Advanced|Complete`: choose Stryker-style default
+  mutator breadth; explicit `--mutators` remains authoritative.
 - `--max-mutants <n>`: cap generated mutants.
 - `--include-metal`: include `.metal` files in token-level mode.
 - `--mode token|clang|clang-ast`: choose mutation implementation, default
@@ -108,6 +110,8 @@ Mutation options:
 - `--coverage-helper-command-template`, `--coverage-helper-tests`: generate
   per-test coverage exports through `stryker-cxx` and merge them into
   `coveredBy` mappings before selecting per-mutant tests.
+- `--since <ref>`: Stryker.NET-style alias for `--base <ref>` in local diff
+  workflows.
 - `--incremental`, `--baseline-file`, `--baseline-max-age-days`,
   `--baseline-branch`, `--write-baseline`, `--clear-baseline`: reuse or update
   compatible baseline cache entries.
@@ -511,8 +515,10 @@ framework-discovery, timeout-calibration, threshold-band, artifact-backend,
 artifact-fallback, execution-mode, execution-backend, and equivalent-suppression options, treats failed
 `stryker-cxx` dry runs as infrastructure errors, and accepts
 `stryker-cxx.report.v1` through the C++ parser while preserving provider
-execution, requested/actual execution backend, requested/actual artifact backend, fallback, scheduler, lifecycle,
-artifact-placement, mutant-switch/llvm-switch, source-precision, and project-analysis/build-graph metadata.
+execution, mutation-level/enabled-mutator, requested/actual execution backend,
+requested/actual artifact backend, fallback, scheduler, lifecycle,
+artifact-placement, mutant-switch/llvm-switch, source-precision, parity, and
+project-analysis/build-graph metadata.
 
 Marmorkrebs result mapping:
 

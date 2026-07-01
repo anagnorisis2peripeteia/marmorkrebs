@@ -72,6 +72,8 @@ Key options:
 
 - `--repo` + `--pr` — derive the changed-file list from a GitHub PR (requires `gh` CLI)
 - `--base <ref>` — derive it from the **local git diff** vs `<ref>`: branch commits since the merge-base, plus staged/unstaged edits and untracked files. This is the mode for locally staged PRs — review-grade mutation testing before anything is pushed.
+- `--since <ref>` — Stryker-style alias for `--base <ref>` when using
+  `stryker-cxx`; useful when review docs mirror Stryker/Stryker.NET terminology.
 - `--changed-files` — or pass the file list explicitly
 - `--test-command <cmd>` — override the tool-default test command
 - `--build-command <cmd>` — build run between mutants (**required** for `stryker-cxx`)
@@ -104,6 +106,9 @@ Key options:
   discoverable, and XCTest destination/only/skip controls use the
   `xcodebuild test-without-building` path
 - `--plugin`, `--plugin-dir`, `--reporter` — forward local plugin manifests, provider hooks, and reporter selection to `stryker-cxx`
+- `--mutation-level <Standard|Advanced|Complete>` — forward Stryker-style
+  default mutator breadth to `stryker-cxx`; explicit `--mutators` remains the
+  exact PR-scope override.
 - `--dashboard-export`, `--dashboard-upload-url`, `--dashboard-upload-retries`, `--dashboard-upload-retry-delay-ms`, `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`, `--dashboard-build-url` — forward dashboard export/upload, retry policy, and CI provenance controls to `stryker-cxx`
 - `--execution-mode <source-overlay|mutant-switch>` / `--execution-backend <auto|source-overlay|mutant-switch|compiled-artifact|llvm-switch>` — forward the native
   `stryker-cxx` execution model/backend selectors and preserve provider fallback
@@ -158,4 +163,4 @@ Marmorkrebs can run before a pull request exists. See [docs/local-vs-pr-usage.md
 
 ## Stryker C++ mutation tool spec
 
-Marmorkrebs uses `stryker-cxx` as the C++ provider. PR skills and new profiles should use `--tool stryker-cxx`; embedded C++ mutation is historical and not the supported gate path. See [docs/stryker-cxx-spec.md](docs/stryker-cxx-spec.md) for the standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.
+Marmorkrebs uses `stryker-cxx` as the C++ provider. PR skills and new profiles should use `--tool stryker-cxx`; embedded C++ mutation is historical and not the supported gate path. Marmorkrebs preserves native provider evidence including mutation level, enabled mutators, execution backend fallback, source precision, scheduler, lifecycle, artifact placement, build graph, and `parity` / `execution.parity` eight-gap Mull/Stryker.NET metadata. See [docs/stryker-cxx-spec.md](docs/stryker-cxx-spec.md) for the standalone CLI, report schema, milestones, and Marmorkrebs adapter plan.

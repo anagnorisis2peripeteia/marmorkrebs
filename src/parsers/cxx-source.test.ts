@@ -88,7 +88,7 @@ describe("parseCxxSource", () => {
       xctestDestination: "platform=iOS Simulator,name=iPhone 15",
       xctestOnlyTesting: ["MathFixtureTests/testAdd"],
       xctestSkipTesting: ["MathFixtureTests/testSlow"],
-      base: "origin/main",
+      since: "origin/main",
       maxMutants: 5,
       timeoutMs: 9000,
       timeoutFactor: 2,
@@ -96,6 +96,7 @@ describe("parseCxxSource", () => {
       thresholdHigh: 0.9,
       thresholdLow: 0.7,
       thresholdBreak: 0.5,
+      mutationLevel: "Advanced",
       mode: "clang-ast",
       executionMode: "mutant-switch",
       executionBackend: "mutant-switch",
@@ -170,6 +171,8 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--threshold-high 0.9"));
     assert.ok(command.includes("--threshold-low 0.7"));
     assert.ok(command.includes("--threshold-break 0.5"));
+    assert.ok(command.includes("--since 'origin/main'"));
+    assert.ok(command.includes("--mutation-level 'Advanced'"));
     assert.ok(command.includes("--mode 'clang-ast'"));
     assert.ok(command.includes("--execution-mode 'mutant-switch'"));
     assert.ok(command.includes("--execution-backend 'mutant-switch'"));
@@ -285,6 +288,8 @@ describe("parseCxxSource", () => {
       thresholds: { high: 0.9, low: 0.7, break: 0.5, status: "low" },
       dryRun: { status: "PASSED" },
       execution: {
+        mutationLevel: "Advanced",
+        enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
         executionMode: "mutant-switch",
         requestedExecutionMode: "mutant-switch",
         analysis: {
@@ -315,7 +320,9 @@ describe("parseCxxSource", () => {
           environmentKeys: ["SECRET_TOKEN"],
           redaction: { enabled: true, replacement: "[REDACTED]" },
         },
+        parity: { schemaVersion: "stryker-cxx.parity.v1" },
       },
+      parity: { schemaVersion: "stryker-cxx.parity.v1" },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
       artifactPlacement: { mode: "mutant-switch" },
       projectAnalysis: {
@@ -388,6 +395,8 @@ describe("parseCxxSource", () => {
     assert.deepEqual(result.provider, {
       name: "stryker-cxx",
       schemaVersion: "stryker-cxx.report.v1",
+      mutationLevel: "Advanced",
+      enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
       executionMode: "mutant-switch",
       requestedExecutionMode: "mutant-switch",
       analysis: {
@@ -417,6 +426,7 @@ describe("parseCxxSource", () => {
         enabled: true,
         implementation: "guarded-source-switch",
       },
+      parity: { schemaVersion: "stryker-cxx.parity.v1" },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
       artifactPlacement: { mode: "mutant-switch" },
       projectAnalysis: {

@@ -34,6 +34,7 @@ Options:
   --base <ref>              Derive changed files from the local git diff vs <ref>
                             (branch commits since merge-base + staged/unstaged +
                             untracked) — for locally staged PRs, nothing pushed
+  --since <ref>             Stryker-style alias for --base in local C++ flows
   --test-command <cmd>      Custom test command (default: tool-specific)
   --build-command <cmd>     Build command run between mutants (required for stryker-cxx)
   --check-command <cmd>     stryker-cxx only: compile/type-check command run before tests
@@ -104,6 +105,7 @@ Options:
   --max-mutants <n>         stryker-cxx only: cap mutants after discovery
   --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
   --mutators <names>        stryker-cxx only: comma-separated mutator names
+  --mutation-level <level>  stryker-cxx only: Standard | Advanced | Complete
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
   --execution-mode <mode>   stryker-cxx only: source-overlay | mutant-switch
   --execution-backend <m>   stryker-cxx only: auto | source-overlay | mutant-switch | compiled-artifact | llvm-switch
@@ -161,6 +163,7 @@ function parseCliArgs(argv: string[]): {
   repo?: string;
   pr?: number;
   base?: string;
+  since?: string;
   tool: MutationTool;
   changedFiles?: string[];
   testCommand?: string;
@@ -225,6 +228,7 @@ function parseCliArgs(argv: string[]): {
   envBlock?: string[];
   includeMetal?: boolean;
   mutators?: string;
+  mutationLevel?: string;
   mode?: string;
   executionMode?: string;
   executionBackend?: string;
@@ -288,6 +292,7 @@ function parseCliArgs(argv: string[]): {
   if (args.repo) result.repo = args.repo;
   if (args.pr) result.pr = parseInt(args.pr, 10);
   if (args.base) result.base = args.base;
+  if (args.since) result.since = args.since;
   const changedFiles = splitCommaList(args["changed-files"]);
   if (changedFiles) result.changedFiles = changedFiles;
   if (args["test-command"]) result.testCommand = args["test-command"];
@@ -375,6 +380,7 @@ function parseCliArgs(argv: string[]): {
   if (args["max-mutants"]) result.maxMutants = parseInt(args["max-mutants"], 10);
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
+  if (args["mutation-level"]) result.mutationLevel = args["mutation-level"];
   if (args.mode) result.mode = args.mode;
   if (args["execution-mode"]) result.executionMode = args["execution-mode"];
   if (args["execution-backend"]) result.executionBackend = args["execution-backend"];
@@ -473,11 +479,12 @@ function main(): void {
     }
   }
 
-  if (!changedFiles && opts.base) {
+  const diffBase = opts.base ?? opts.since;
+  if (!changedFiles && diffBase) {
     try {
-      changedFiles = getChangedFilesFromGit(repoDir, opts.base);
+      changedFiles = getChangedFilesFromGit(repoDir, diffBase);
       console.error(
-        `[marmorkrebs] ${changedFiles.length} changed files from local diff vs ${opts.base}`,
+        `[marmorkrebs] ${changedFiles.length} changed files from local diff vs ${diffBase}`,
       );
     } catch (error) {
       console.error(
@@ -520,6 +527,7 @@ function main(): void {
     xctestOnlyTesting: opts.xctestOnlyTesting,
     xctestSkipTesting: opts.xctestSkipTesting,
     base: opts.base,
+    since: opts.since,
     timeoutMs: opts.timeout,
     threshold: opts.threshold,
     thresholdHigh: opts.thresholdHigh,
@@ -556,6 +564,7 @@ function main(): void {
     maxMutants: opts.maxMutants,
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
+    mutationLevel: opts.mutationLevel,
     mode: opts.mode,
     executionMode: opts.executionMode,
     executionBackend: opts.executionBackend,

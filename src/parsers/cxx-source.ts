@@ -59,6 +59,8 @@ interface CxxReport {
     failureReason?: string;
   };
   execution?: {
+    mutationLevel?: string;
+    enabledMutators?: string[];
     executionMode?: string;
     requestedExecutionMode?: string;
     executionBackend?: string;
@@ -73,7 +75,9 @@ interface CxxReport {
     mutantSwitch?: Record<string, unknown>;
     llvmSwitch?: Record<string, unknown>;
     resourceIsolation?: Record<string, unknown>;
+    parity?: Record<string, unknown>;
   };
+  parity?: Record<string, unknown>;
   lifecycle?: Record<string, unknown>;
   artifactPlacement?: Record<string, unknown>;
   projectAnalysis?: Record<string, unknown>;
@@ -315,6 +319,8 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.base) {
     parts.push("--base", `'${shellEscape(config.base)}'`);
+  } else if (config.since) {
+    parts.push("--since", `'${shellEscape(config.since)}'`);
   }
   if (config.maxMutants !== undefined) {
     parts.push("--max-mutants", String(config.maxMutants));
@@ -324,6 +330,9 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.mutators) {
     parts.push("--mutators", `'${shellEscape(config.mutators)}'`);
+  }
+  if (config.mutationLevel) {
+    parts.push("--mutation-level", `'${shellEscape(config.mutationLevel)}'`);
   }
   for (const plugin of config.plugins ?? []) {
     parts.push("--plugin", `'${shellEscape(plugin)}'`);
@@ -591,6 +600,12 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
     provider: {
       name: tool,
       schemaVersion: report.schemaVersion,
+      ...(report.execution?.mutationLevel !== undefined
+        ? { mutationLevel: report.execution.mutationLevel }
+        : {}),
+      ...(report.execution?.enabledMutators !== undefined
+        ? { enabledMutators: report.execution.enabledMutators }
+        : {}),
       executionMode: report.execution?.executionMode,
       requestedExecutionMode: report.execution?.requestedExecutionMode,
       ...(report.execution?.executionBackend !== undefined
@@ -618,6 +633,9 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
       mutantSwitch: report.execution?.mutantSwitch,
       ...(report.execution?.llvmSwitch !== undefined
         ? { llvmSwitch: report.execution.llvmSwitch }
+        : {}),
+      ...(report.parity !== undefined || report.execution?.parity !== undefined
+        ? { parity: report.parity ?? report.execution?.parity }
         : {}),
       lifecycle: report.lifecycle,
       artifactPlacement: report.artifactPlacement,

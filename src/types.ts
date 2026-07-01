@@ -56,6 +56,7 @@ export interface MutationConfig {
   xctestOnlyTesting?: string[];
   xctestSkipTesting?: string[];
   base?: string;
+  since?: string;
   threshold?: number;
   thresholdHigh?: number;
   thresholdLow?: number;
@@ -93,6 +94,7 @@ export interface MutationConfig {
   maxMutants?: number;
   includeMetal?: boolean;
   mutators?: string;
+  mutationLevel?: string;
   mode?: string;
   executionMode?: string;
   executionBackend?: string;
