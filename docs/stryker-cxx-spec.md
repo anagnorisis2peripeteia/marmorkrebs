@@ -83,6 +83,8 @@ Mutation options:
 - `--mutators <names>`: comma-separated mutator list.
 - `--mutation-level Basic|Standard|Advanced|Complete`: choose Stryker-style default
   mutator breadth; explicit `--mutators` remains authoritative.
+- `--ignore-mutations <names>`: forward provider mutator-family ignores while
+  preserving matching mutants as `IGNORED` evidence.
 - `--max-mutants <n>`: cap generated mutants.
 - `--include-metal`: include `.metal` files in token-level mode.
 - `--mode token|clang|clang-ast`: choose mutation implementation, default

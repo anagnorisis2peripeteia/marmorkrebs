@@ -111,6 +111,8 @@ Optional controls:
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
 - `--mutation-level <Basic|Standard|Advanced|Complete>` forwards Stryker-style default
   mutator breadth; explicit `--mutators` remains the exact PR-scope override.
+- `--ignore-mutations <names>` forwards Stryker-style mutator-family ignores
+  while preserving ignored mutants in the provider report.
 - `--parity-profile <summary|review|strict>` evaluates the provider's
   eight-gap Mull/Stryker.NET parity metadata after parsing the report.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.

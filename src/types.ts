@@ -95,6 +95,7 @@ export interface MutationConfig {
   includeMetal?: boolean;
   mutators?: string;
   mutationLevel?: string;
+  ignoreMutations?: string;
   parityProfile?: "summary" | "review" | "strict";
   mode?: string;
   executionMode?: string;

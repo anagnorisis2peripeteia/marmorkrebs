@@ -109,6 +109,8 @@ Key options:
 - `--mutation-level <Basic|Standard|Advanced|Complete>` — forward Stryker-style
   default mutator breadth to `stryker-cxx`; explicit `--mutators` remains the
   exact PR-scope override.
+- `--ignore-mutations <names>` — forward Stryker-style mutator-family ignores;
+  matching provider mutants stay visible as `IGNORED`.
 - `--parity-profile <summary|review|strict>` — enforce the preserved
   `stryker-cxx` eight-gap parity metadata in Marmorkrebs; `review` fails
   missing/unknown evidence and `strict` also fails partial evidence.

@@ -61,6 +61,8 @@ interface CxxReport {
   execution?: {
     mutationLevel?: string;
     enabledMutators?: string[];
+    ignoredMutators?: string[];
+    since?: string;
     executionMode?: string;
     requestedExecutionMode?: string;
     executionBackend?: string;
@@ -333,6 +335,9 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.mutationLevel) {
     parts.push("--mutation-level", `'${shellEscape(config.mutationLevel)}'`);
+  }
+  if (config.ignoreMutations) {
+    parts.push("--ignore-mutations", `'${shellEscape(config.ignoreMutations)}'`);
   }
   for (const plugin of config.plugins ?? []) {
     parts.push("--plugin", `'${shellEscape(plugin)}'`);
@@ -615,6 +620,12 @@ export function parseCxxSource(
         : {}),
       ...(report.execution?.enabledMutators !== undefined
         ? { enabledMutators: report.execution.enabledMutators }
+        : {}),
+      ...(report.execution?.ignoredMutators !== undefined
+        ? { ignoredMutators: report.execution.ignoredMutators }
+        : {}),
+      ...(report.execution?.since !== undefined
+        ? { since: report.execution.since }
         : {}),
       executionMode: report.execution?.executionMode,
       requestedExecutionMode: report.execution?.requestedExecutionMode,

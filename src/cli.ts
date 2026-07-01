@@ -106,6 +106,8 @@ Options:
   --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
   --mutators <names>        stryker-cxx only: comma-separated mutator names
   --mutation-level <level>  stryker-cxx only: Basic | Standard | Advanced | Complete
+  --ignore-mutations <names>
+                            stryker-cxx only: comma-separated mutators to mark ignored
   --parity-profile <p>      stryker-cxx only: summary | review | strict
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
   --execution-mode <mode>   stryker-cxx only: source-overlay | mutant-switch
@@ -230,6 +232,7 @@ function parseCliArgs(argv: string[]): {
   includeMetal?: boolean;
   mutators?: string;
   mutationLevel?: string;
+  ignoreMutations?: string;
   parityProfile?: "summary" | "review" | "strict";
   mode?: string;
   executionMode?: string;
@@ -383,6 +386,7 @@ function parseCliArgs(argv: string[]): {
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
   if (args["mutation-level"]) result.mutationLevel = args["mutation-level"];
+  if (args["ignore-mutations"]) result.ignoreMutations = args["ignore-mutations"];
   if (args["parity-profile"]) {
     const profile = args["parity-profile"];
     if (!["summary", "review", "strict"].includes(profile)) {
@@ -575,6 +579,7 @@ function main(): void {
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
     mutationLevel: opts.mutationLevel,
+    ignoreMutations: opts.ignoreMutations,
     parityProfile: opts.parityProfile,
     mode: opts.mode,
     executionMode: opts.executionMode,

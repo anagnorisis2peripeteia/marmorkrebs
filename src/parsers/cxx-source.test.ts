@@ -97,6 +97,7 @@ describe("parseCxxSource", () => {
       thresholdLow: 0.7,
       thresholdBreak: 0.5,
       mutationLevel: "Advanced",
+      ignoreMutations: "EqualityOperator",
       mode: "clang-ast",
       executionMode: "mutant-switch",
       executionBackend: "mutant-switch",
@@ -173,6 +174,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--threshold-break 0.5"));
     assert.ok(command.includes("--since 'origin/main'"));
     assert.ok(command.includes("--mutation-level 'Advanced'"));
+    assert.ok(command.includes("--ignore-mutations 'EqualityOperator'"));
     assert.ok(command.includes("--mode 'clang-ast'"));
     assert.ok(command.includes("--execution-mode 'mutant-switch'"));
     assert.ok(command.includes("--execution-backend 'mutant-switch'"));
@@ -290,6 +292,8 @@ describe("parseCxxSource", () => {
       execution: {
         mutationLevel: "Advanced",
         enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
+        ignoredMutators: ["EqualityOperator"],
+        since: "origin/main",
         executionMode: "mutant-switch",
         requestedExecutionMode: "mutant-switch",
         analysis: {
@@ -397,6 +401,8 @@ describe("parseCxxSource", () => {
       schemaVersion: "stryker-cxx.report.v1",
       mutationLevel: "Advanced",
       enabledMutators: ["ArithmeticOperator", "EqualityOperator"],
+      ignoredMutators: ["EqualityOperator"],
+      since: "origin/main",
       executionMode: "mutant-switch",
       requestedExecutionMode: "mutant-switch",
       analysis: {
