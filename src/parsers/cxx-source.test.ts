@@ -319,6 +319,12 @@ describe("parseCxxSource", () => {
           enabled: true,
           implementation: "guarded-source-switch",
         },
+        compilePruning: {
+          strategy: "mutant-switch-prune-and-retry",
+          attempts: 1,
+          retryBatches: 1,
+          prunedMutants: 1,
+        },
         resourceIsolation: {
           worktreeMode: "copy",
           environmentKeys: ["SECRET_TOKEN"],
@@ -431,6 +437,12 @@ describe("parseCxxSource", () => {
       llvmSwitch: {
         enabled: true,
         implementation: "guarded-source-switch",
+      },
+      compilePruning: {
+        strategy: "mutant-switch-prune-and-retry",
+        attempts: 1,
+        retryBatches: 1,
+        prunedMutants: 1,
       },
       parity: { schemaVersion: "stryker-cxx.parity.v1" },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },

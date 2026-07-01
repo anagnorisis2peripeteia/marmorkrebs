@@ -76,6 +76,7 @@ interface CxxReport {
     testScheduler?: Record<string, unknown>;
     mutantSwitch?: Record<string, unknown>;
     llvmSwitch?: Record<string, unknown>;
+    compilePruning?: Record<string, unknown>;
     resourceIsolation?: Record<string, unknown>;
     parity?: Record<string, unknown>;
   };
@@ -654,6 +655,9 @@ export function parseCxxSource(
       mutantSwitch: report.execution?.mutantSwitch,
       ...(report.execution?.llvmSwitch !== undefined
         ? { llvmSwitch: report.execution.llvmSwitch }
+        : {}),
+      ...(report.execution?.compilePruning !== undefined
+        ? { compilePruning: report.execution.compilePruning }
         : {}),
       ...(parity !== undefined
         ? { parity }

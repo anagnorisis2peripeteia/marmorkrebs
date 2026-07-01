@@ -519,8 +519,9 @@ artifact-fallback, execution-mode, execution-backend, and equivalent-suppression
 `stryker-cxx.report.v1` through the C++ parser while preserving provider
 execution, mutation-level/enabled-mutator, requested/actual execution backend,
 requested/actual artifact backend, fallback, scheduler, lifecycle,
-artifact-placement, mutant-switch/llvm-switch, source-precision, parity, and
-project-analysis/build-graph metadata. `--parity-profile summary|review|strict`
+artifact-placement, mutant-switch/llvm-switch, compile-pruning,
+source-precision, parity, and project-analysis/build-graph metadata.
+`--parity-profile summary|review|strict`
 is evaluated by Marmorkrebs after parsing the provider report: `review` fails
 missing/unknown parity items, while `strict` also fails partial items.
 
