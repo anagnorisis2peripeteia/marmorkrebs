@@ -77,6 +77,9 @@ interface CxxReport {
     mutantSwitch?: Record<string, unknown>;
     llvmSwitch?: Record<string, unknown>;
     compilePruning?: Record<string, unknown>;
+    reporters?: string[];
+    reporterRuns?: Record<string, unknown>[];
+    dashboard?: Record<string, unknown>;
     resourceIsolation?: Record<string, unknown>;
     parity?: Record<string, unknown>;
   };
@@ -658,6 +661,15 @@ export function parseCxxSource(
         : {}),
       ...(report.execution?.compilePruning !== undefined
         ? { compilePruning: report.execution.compilePruning }
+        : {}),
+      ...(report.execution?.reporters !== undefined
+        ? { reporters: report.execution.reporters }
+        : {}),
+      ...(report.execution?.reporterRuns !== undefined
+        ? { reporterRuns: report.execution.reporterRuns }
+        : {}),
+      ...(report.execution?.dashboard !== undefined
+        ? { dashboard: report.execution.dashboard }
         : {}),
       ...(parity !== undefined
         ? { parity }

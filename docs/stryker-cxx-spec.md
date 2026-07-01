@@ -520,7 +520,8 @@ artifact-fallback, execution-mode, execution-backend, and equivalent-suppression
 execution, mutation-level/enabled-mutator, requested/actual execution backend,
 requested/actual artifact backend, fallback, scheduler, lifecycle,
 artifact-placement, mutant-switch/llvm-switch, compile-pruning,
-source-precision, parity, and project-analysis/build-graph metadata.
+source-precision, reporter/dashboard, parity, and project-analysis/build-graph
+metadata.
 `--parity-profile summary|review|strict`
 is evaluated by Marmorkrebs after parsing the provider report: `review` fails
 missing/unknown parity items, while `strict` also fails partial items.

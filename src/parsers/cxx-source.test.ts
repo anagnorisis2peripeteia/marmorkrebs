@@ -325,6 +325,12 @@ describe("parseCxxSource", () => {
           retryBatches: 1,
           prunedMutants: 1,
         },
+        reporters: ["html", "dashboard"],
+        reporterRuns: [{ name: "html", status: "passed" }],
+        dashboard: {
+          export: { enabled: true, path: "dashboard.json" },
+          upload: { enabled: false },
+        },
         resourceIsolation: {
           worktreeMode: "copy",
           environmentKeys: ["SECRET_TOKEN"],
@@ -443,6 +449,12 @@ describe("parseCxxSource", () => {
         attempts: 1,
         retryBatches: 1,
         prunedMutants: 1,
+      },
+      reporters: ["html", "dashboard"],
+      reporterRuns: [{ name: "html", status: "passed" }],
+      dashboard: {
+        export: { enabled: true, path: "dashboard.json" },
+        upload: { enabled: false },
       },
       parity: { schemaVersion: "stryker-cxx.parity.v1" },
       lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
