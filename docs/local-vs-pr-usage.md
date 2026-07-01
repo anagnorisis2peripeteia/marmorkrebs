@@ -109,8 +109,10 @@ Optional controls:
   whole files where possible.
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
-- `--mutation-level <Standard|Advanced|Complete>` forwards Stryker-style default
+- `--mutation-level <Basic|Standard|Advanced|Complete>` forwards Stryker-style default
   mutator breadth; explicit `--mutators` remains the exact PR-scope override.
+- `--parity-profile <summary|review|strict>` evaluates the provider's
+  eight-gap Mull/Stryker.NET parity metadata after parsing the report.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.
 - `--execution-mode <source-overlay|mutant-switch>` forwards the native
   `stryker-cxx` execution model selector. Use `mutant-switch` when the selected

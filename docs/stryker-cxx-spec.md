@@ -81,7 +81,7 @@ Scoping options:
 Mutation options:
 
 - `--mutators <names>`: comma-separated mutator list.
-- `--mutation-level Standard|Advanced|Complete`: choose Stryker-style default
+- `--mutation-level Basic|Standard|Advanced|Complete`: choose Stryker-style default
   mutator breadth; explicit `--mutators` remains authoritative.
 - `--max-mutants <n>`: cap generated mutants.
 - `--include-metal`: include `.metal` files in token-level mode.
@@ -518,7 +518,9 @@ artifact-fallback, execution-mode, execution-backend, and equivalent-suppression
 execution, mutation-level/enabled-mutator, requested/actual execution backend,
 requested/actual artifact backend, fallback, scheduler, lifecycle,
 artifact-placement, mutant-switch/llvm-switch, source-precision, parity, and
-project-analysis/build-graph metadata.
+project-analysis/build-graph metadata. `--parity-profile summary|review|strict`
+is evaluated by Marmorkrebs after parsing the provider report: `review` fails
+missing/unknown parity items, while `strict` also fails partial items.
 
 Marmorkrebs result mapping:
 

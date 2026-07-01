@@ -70,7 +70,7 @@ function runOnExistingLease(
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(leaseId, command, timeoutMs);
 
-    const parsed = parseOutput(config.tool, result.stdout, result.stderr);
+    const parsed = parseOutput(config, result.stdout, result.stderr);
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -98,7 +98,7 @@ function runInCrabbox(
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(lease.id, command, timeoutMs);
 
-    const parsed = parseOutput(config.tool, result.stdout, result.stderr);
+    const parsed = parseOutput(config, result.stdout, result.stderr);
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -145,7 +145,7 @@ function runLocally(
         // fall back to stdout
       }
     }
-    const parsed = parseOutput(config.tool, stdout, result.stderr ?? "");
+    const parsed = parseOutput(config, stdout, result.stderr ?? "");
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -180,7 +180,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
   }
 }
 
-function parseOutput(tool: MutationTool, stdout: string, stderr: string): MutationResult {
+function parseOutput(config: MutationConfig, stdout: string, stderr: string): MutationResult {
+  const tool = config.tool;
   switch (tool) {
     case "go-mutesting":
       return parseGoMutesting(stdout + "\n" + stderr);
@@ -195,9 +196,9 @@ function parseOutput(tool: MutationTool, stdout: string, stderr: string): Mutati
     case "mutmut":
       return parseMutmut(stdout);
     case "stryker-cxx":
-      return parseCxxSource(stdout, tool);
+      return parseCxxSource(stdout, tool, config);
     case "mull":
-      return parseCxxSource(stdout, tool);
+      return parseCxxSource(stdout, tool, config);
     default:
       return { ...EMPTY_RESULT, tool, error: `Unknown tool: ${tool}` };
   }

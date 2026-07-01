@@ -105,7 +105,8 @@ Options:
   --max-mutants <n>         stryker-cxx only: cap mutants after discovery
   --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
   --mutators <names>        stryker-cxx only: comma-separated mutator names
-  --mutation-level <level>  stryker-cxx only: Standard | Advanced | Complete
+  --mutation-level <level>  stryker-cxx only: Basic | Standard | Advanced | Complete
+  --parity-profile <p>      stryker-cxx only: summary | review | strict
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
   --execution-mode <mode>   stryker-cxx only: source-overlay | mutant-switch
   --execution-backend <m>   stryker-cxx only: auto | source-overlay | mutant-switch | compiled-artifact | llvm-switch
@@ -229,6 +230,7 @@ function parseCliArgs(argv: string[]): {
   includeMetal?: boolean;
   mutators?: string;
   mutationLevel?: string;
+  parityProfile?: "summary" | "review" | "strict";
   mode?: string;
   executionMode?: string;
   executionBackend?: string;
@@ -381,6 +383,14 @@ function parseCliArgs(argv: string[]): {
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
   if (args["mutation-level"]) result.mutationLevel = args["mutation-level"];
+  if (args["parity-profile"]) {
+    const profile = args["parity-profile"];
+    if (!["summary", "review", "strict"].includes(profile)) {
+      console.error("Error: --parity-profile must be one of: summary, review, strict");
+      usage();
+    }
+    result.parityProfile = profile as "summary" | "review" | "strict";
+  }
   if (args.mode) result.mode = args.mode;
   if (args["execution-mode"]) result.executionMode = args["execution-mode"];
   if (args["execution-backend"]) result.executionBackend = args["execution-backend"];
@@ -565,6 +575,7 @@ function main(): void {
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
     mutationLevel: opts.mutationLevel,
+    parityProfile: opts.parityProfile,
     mode: opts.mode,
     executionMode: opts.executionMode,
     executionBackend: opts.executionBackend,

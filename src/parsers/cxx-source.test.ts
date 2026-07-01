@@ -564,4 +564,70 @@ describe("parseCxxSource", () => {
     assert.equal(result.error, "initial tests failed");
     assert.deepEqual(result.dryRun, { status: "FAILED", failureReason: "initial tests failed" });
   });
+
+  it("enforces requested stryker-cxx review parity profile", () => {
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      tool: "stryker-cxx",
+      totalMutants: 0,
+      killed: 0,
+      survived: 0,
+      buildErrors: 0,
+      timeouts: 0,
+      ignored: 0,
+      score: 1,
+      mutants: [],
+      parity: {
+        schemaVersion: "stryker-cxx.parity.v1",
+        items: [
+          { id: "coverage-scheduler", status: "missing" },
+          { id: "marmorkrebs-review-ux", status: "external" },
+        ],
+      },
+    };
+
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx", {
+      parityProfile: "review",
+    });
+
+    assert.match(result.error ?? "", /coverage-scheduler=missing/);
+    assert.deepEqual(result.provider?.parityGate, {
+      profile: "review",
+      status: "failed",
+      failures: ["coverage-scheduler=missing"],
+    });
+  });
+
+  it("allows covered and external items under strict stryker-cxx parity profile", () => {
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      tool: "stryker-cxx",
+      totalMutants: 0,
+      killed: 0,
+      survived: 0,
+      buildErrors: 0,
+      timeouts: 0,
+      ignored: 0,
+      score: 1,
+      mutants: [],
+      parity: {
+        schemaVersion: "stryker-cxx.parity.v1",
+        items: [
+          { id: "mutator-levels", status: "covered" },
+          { id: "marmorkrebs-review-ux", status: "external" },
+        ],
+      },
+    };
+
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx", {
+      parityProfile: "strict",
+    });
+
+    assert.equal(result.error, null);
+    assert.deepEqual(result.provider?.parityGate, {
+      profile: "strict",
+      status: "passed",
+      failures: [],
+    });
+  });
 });

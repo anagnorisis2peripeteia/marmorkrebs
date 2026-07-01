@@ -529,7 +529,11 @@ function parseScopedCxxTargets(sourceFiles: string[]): CxxTargetSpec {
   };
 }
 
-export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx"): MutationResult {
+export function parseCxxSource(
+  output: string,
+  tool: MutationTool = "stryker-cxx",
+  config: Pick<MutationConfig, "parityProfile"> = {},
+): MutationResult {
   let report: CxxReport;
   try {
     report = JSON.parse(output) as CxxReport;
@@ -581,6 +585,12 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
   const dryRunFailed =
     report.schemaVersion === "stryker-cxx.report.v1" &&
     report.dryRun?.status === "FAILED";
+  const parity = report.parity ?? report.execution?.parity;
+  const parityProfile = config.parityProfile ?? "summary";
+  const parityFailures = parityProfileFailures(parity, parityProfile);
+  const parityError = parityFailures.length
+    ? `stryker-cxx parity ${parityProfile} failed: ${parityFailures.join(", ")}`
+    : null;
   const result: MutationResult = {
     tool,
     totalMutants:
@@ -634,18 +644,62 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
       ...(report.execution?.llvmSwitch !== undefined
         ? { llvmSwitch: report.execution.llvmSwitch }
         : {}),
-      ...(report.parity !== undefined || report.execution?.parity !== undefined
-        ? { parity: report.parity ?? report.execution?.parity }
+      ...(parity !== undefined
+        ? { parity }
+        : {}),
+      ...(parityProfile !== "summary"
+        ? {
+            parityGate: {
+              profile: parityProfile,
+              status: parityError ? "failed" : "passed",
+              failures: parityFailures,
+            },
+          }
         : {}),
       lifecycle: report.lifecycle,
       artifactPlacement: report.artifactPlacement,
       projectAnalysis: report.projectAnalysis,
     },
-    error: dryRunFailed ? report.dryRun?.failureReason ?? "stryker-cxx dry run failed" : null,
+    error: dryRunFailed
+      ? report.dryRun?.failureReason ?? "stryker-cxx dry run failed"
+      : parityError,
     elapsedMs: 0,
   };
 
   return result;
+}
+
+function parityProfileFailures(
+  parity: Record<string, unknown> | undefined,
+  profile: "summary" | "review" | "strict",
+): string[] {
+  if (profile === "summary") {
+    return [];
+  }
+  if (!parity) {
+    return ["missing-parity-metadata"];
+  }
+  const items = parity.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return ["missing-parity-items"];
+  }
+  const allowed =
+    profile === "review"
+      ? new Set(["covered", "partial", "external"])
+      : new Set(["covered", "external"]);
+  const failures: string[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") {
+      failures.push("invalid-parity-item");
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const status = String(record.status ?? "unknown");
+    if (!allowed.has(status)) {
+      failures.push(`${String(record.id ?? "unknown")}=${status}`);
+    }
+  }
+  return failures;
 }
 
 function shellEscape(s: string): string {
