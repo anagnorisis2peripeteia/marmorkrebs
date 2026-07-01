@@ -25,7 +25,7 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 
 Marmorkrebs delegates C++/ObjC++/Metal mutation to external engines.
 
-Use `--tool stryker-cxx` as the canonical path for C++/ObjC++/Metal. It validates the unmodified project, runs scoped mutants, and normalizes native outcomes (`KILLED`, `SURVIVED`, `BUILD_ERROR`, `TIMEOUT`, `IGNORED`) to Marmorkrebs' common result shape.
+Use `--tool stryker-cxx` as the canonical path for C++/ObjC++/Metal. It validates the unmodified project, runs scoped mutants, and normalizes native outcomes (`KILLED`, `SURVIVED`, `BUILD_ERROR`, `CHECK_ERROR`, `NO_COVERAGE`, `TIMEOUT`, `IGNORED`, `RUNTIME_ERROR`) to Marmorkrebs' common result shape.
 
 For C++-only workflows where you prefer the lighter command path, `--tool mull` is available and automatically falls back to `stryker-cxx` when `mull` is not available.
 
@@ -37,9 +37,19 @@ For C++-only workflows where you prefer the lighter command path, `--tool mull` 
 
 Marmorkrebs forwards `stryker-cxx` artifact backend selectors without
 renaming them. Use `--artifact-backend compiled-executable|compiled-library|compiled-object`
-for CMake/CTest compiled-artifact execution when the selected `stryker-cxx`
-binary supports it; otherwise omit the flag and use the default
-`source-overlay` compatibility backend.
+for native compiled-artifact execution when the selected `stryker-cxx` binary
+supports it. `compiled-executable` supports CMake/CTest and simple
+Make/Ninja/Meson/Bazel/Xcode executable targets; Bazel requires an explicit
+`--build-target` label and `--test-binary` artifact path, and Xcode requires
+`--test-binary` plus either `--build-target` or `--xcode-scheme`.
+`compiled-library` supports CMake/CTest, explicit Make/Ninja/Meson
+`lib<target>` artifacts, and Bazel/Xcode libraries when `--artifact-path` names
+the original library to swap/restore. `compiled-object` supports CMake/CTest
+and explicit Make/Ninja/Meson/Bazel targets when `--artifact-path` names the
+linked artifact and the selected build emits `compile_commands.json`; Xcode
+object support remains provider-blocked. Use
+`--artifact-fallback source-overlay` when unsupported projects should downgrade
+explicitly instead of failing preflight.
 
 File-scope syntax such as `src/foo.cpp:123` is normalized for the engine as
 `--lines 123`, and forwarded as global ranges so C++ scope stays tight to the
@@ -69,7 +79,7 @@ Key options:
 - `--skip-tests` — run `stryker-cxx` build/check phases only and mark viable mutants as survivors
 - `--coverage-file <path>` / `--coverage-provider <id>` / `--coverage-test-command-template <cmd>` / `--coverage-helper-command-template <cmd>` / `--coverage-helper-tests <tests>` — forward coverage data so `stryker-cxx` can mark uncovered mutants as `NO_COVERAGE`; when coverage includes covering tests or helper-generated per-test coverage, select per-mutant test commands
 - `--incremental`, `--baseline-file <path>`, `--baseline-max-age-days <n>`, `--baseline-branch <name>`, `--write-baseline <path>`, `--clear-baseline` — forward baseline-cache and reuse-policy controls to `stryker-cxx`
-- `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` / `--artifact-fallback <none|source-overlay>` — forward `stryker-cxx` artifact backend selection. Compiled artifact mode is currently a CMake/CTest `stryker-cxx` feature; Marmorkrebs does not emulate it.
+- `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` / `--artifact-path <path>` / `--artifact-fallback <none|source-overlay>` — forward `stryker-cxx` artifact backend selection. Marmorkrebs does not emulate compiled artifacts; it preserves the provider's requested/actual backend and fallback evidence in normalized output.
 - `--batch-mutants`, `--batch-size <n>`, `--worktree-mode <inplace|copy|git-worktree>` — forward opt-in batching controls to `stryker-cxx`; batching uses conservative proximity/source-structure heuristics, and backend-specific constraints are enforced by the selected `stryker-cxx` binary
 - `--retain-worktrees`, `--retain-worktrees-for <statuses>`,
   `--retained-worktree-ttl-hours <n>`, `--worker-tmp-dir <path>`,
@@ -94,7 +104,10 @@ Key options:
   discoverable, and XCTest destination/only/skip controls use the
   `xcodebuild test-without-building` path
 - `--plugin`, `--plugin-dir`, `--reporter` — forward local plugin manifests, provider hooks, and reporter selection to `stryker-cxx`
-- `--dashboard-export`, `--dashboard-upload-url`, `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`, `--dashboard-build-url` — forward dashboard export/upload and CI provenance controls to `stryker-cxx`
+- `--dashboard-export`, `--dashboard-upload-url`, `--dashboard-upload-retries`, `--dashboard-upload-retry-delay-ms`, `--dashboard-project`, `--dashboard-branch`, `--dashboard-commit`, `--dashboard-build-url` — forward dashboard export/upload, retry policy, and CI provenance controls to `stryker-cxx`
+- `--execution-mode <source-overlay|mutant-switch>` — forward the native
+  `stryker-cxx` execution model selector and preserve provider fallback
+  evidence in the normalized result
 - `--equivalent-suppression <off|conservative|aggressive>` — forward native
   equivalent/noise suppression mode; use `off` for raw proof runs
 - `--stryker-cxx-bin <path>` — use a specific `stryker-cxx` binary
@@ -103,6 +116,7 @@ Key options:
 - `--threshold-high <0-1>`, `--threshold-low <0-1>`, `--threshold-break <0-1>` — forward Stryker-style score bands to `stryker-cxx`
 - `--timeout <ms>` — mutation run timeout (default 480000)
 - `--timeout-factor <n>`, `--timeout-constant-ms <n>` — forward dry-run-derived timeout calibration to `stryker-cxx`
+- `--distribution-manifest <path>` — forward `stryker-cxx` shard/worker manifest output for CI artifacts and proof bundles
 - `--skip-initial-test` — skip the unmutated build/test validation for advanced or legacy flows
 - `--dry-run-only` — validate build/test commands and emit the lifecycle report without executing mutants
 

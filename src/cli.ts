@@ -40,6 +40,7 @@ Options:
   --build-system <name>     stryker-cxx only: cmake | ctest | ninja | make | meson | bazel | xcodebuild
   --build-dir <path>        stryker-cxx only: adapter build directory
   --build-target <target>   stryker-cxx only: adapter build target
+  --artifact-path <path>    stryker-cxx only: original artifact to swap/restore
   --artifact-backend <mode> stryker-cxx only: source-overlay | compiled-executable | compiled-library | compiled-object
   --artifact-fallback <mode>
                             stryker-cxx only: none | source-overlay
@@ -94,6 +95,8 @@ Options:
                             stryker-cxx only: remove old retained worktrees under worker tmp
   --worker-tmp-dir <path>   stryker-cxx only: parent directory for worker worktrees
   --worker-label <label>    stryker-cxx only: label retained worker/worktree artifacts
+  --distribution-manifest <path>
+                            stryker-cxx only: write shard/work distribution manifest
   --env <KEY=VALUE,...>     stryker-cxx only: explicit env injected into build/check/test
   --env-inherit <KEY,...>   stryker-cxx only: inherited env allowlist for build/check/test
   --env-block <KEY,...>     stryker-cxx only: inherited env denylist for build/check/test
@@ -101,6 +104,7 @@ Options:
   --include-metal           stryker-cxx only: mutate .metal files instead of skipping them
   --mutators <names>        stryker-cxx only: comma-separated mutator names
   --mode <mode>             stryker-cxx only: token | clang | clang-ast
+  --execution-mode <mode>   stryker-cxx only: source-overlay | mutant-switch
   --equivalent-suppression <mode>
                             stryker-cxx only: off | conservative | aggressive
   --plugin <path>           stryker-cxx only: plugin manifest path, repeatable via comma
@@ -112,6 +116,10 @@ Options:
   --dashboard-version <v>   stryker-cxx only: dashboard payload version metadata
   --dashboard-retention-days <n>
                             stryker-cxx only: dashboard retention policy metadata
+  --dashboard-upload-retries <n>
+                            stryker-cxx only: dashboard upload retry count
+  --dashboard-upload-retry-delay-ms <n>
+                            stryker-cxx only: dashboard upload retry delay
   --dashboard-project <id>  stryker-cxx only: dashboard project/repository id
   --dashboard-branch <name> stryker-cxx only: dashboard branch name
   --dashboard-commit <sha>  stryker-cxx only: dashboard commit sha
@@ -159,6 +167,7 @@ function parseCliArgs(argv: string[]): {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  artifactPath?: string;
   artifactBackend?: string;
   artifactFallback?: string;
   xcodeWorkspace?: string;
@@ -207,12 +216,14 @@ function parseCliArgs(argv: string[]): {
   retainedWorktreeTtlHours?: number;
   workerTmpDir?: string;
   workerLabel?: string;
+  distributionManifest?: string;
   env?: string[];
   envInherit?: string[];
   envBlock?: string[];
   includeMetal?: boolean;
   mutators?: string;
   mode?: string;
+  executionMode?: string;
   equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
@@ -221,6 +232,8 @@ function parseCliArgs(argv: string[]): {
   dashboardUploadUrl?: string;
   dashboardVersion?: string;
   dashboardRetentionDays?: number;
+  dashboardUploadRetries?: number;
+  dashboardUploadRetryDelayMs?: number;
   dashboardProject?: string;
   dashboardBranch?: string;
   dashboardCommit?: string;
@@ -279,6 +292,7 @@ function parseCliArgs(argv: string[]): {
   if (args["build-system"]) result.buildSystem = args["build-system"];
   if (args["build-dir"]) result.buildDir = args["build-dir"];
   if (args["build-target"]) result.buildTarget = args["build-target"];
+  if (args["artifact-path"]) result.artifactPath = args["artifact-path"];
   if (args["artifact-backend"]) result.artifactBackend = args["artifact-backend"];
   if (args["artifact-fallback"]) result.artifactFallback = args["artifact-fallback"];
   if (args["xcode-workspace"]) result.xcodeWorkspace = args["xcode-workspace"];
@@ -346,6 +360,7 @@ function parseCliArgs(argv: string[]): {
   }
   if (args["worker-tmp-dir"]) result.workerTmpDir = args["worker-tmp-dir"];
   if (args["worker-label"]) result.workerLabel = args["worker-label"];
+  if (args["distribution-manifest"]) result.distributionManifest = args["distribution-manifest"];
   const env = splitCommaList(args.env);
   if (env) result.env = env;
   const envInherit = splitCommaList(args["env-inherit"]);
@@ -356,6 +371,7 @@ function parseCliArgs(argv: string[]): {
   if ("include-metal" in args) result.includeMetal = true;
   if (args.mutators) result.mutators = args.mutators;
   if (args.mode) result.mode = args.mode;
+  if (args["execution-mode"]) result.executionMode = args["execution-mode"];
   if (args["equivalent-suppression"]) {
     result.equivalentSuppression = args["equivalent-suppression"];
   }
@@ -370,6 +386,12 @@ function parseCliArgs(argv: string[]): {
   if (args["dashboard-version"]) result.dashboardVersion = args["dashboard-version"];
   if (args["dashboard-retention-days"]) {
     result.dashboardRetentionDays = parseInt(args["dashboard-retention-days"], 10);
+  }
+  if (args["dashboard-upload-retries"]) {
+    result.dashboardUploadRetries = parseInt(args["dashboard-upload-retries"], 10);
+  }
+  if (args["dashboard-upload-retry-delay-ms"]) {
+    result.dashboardUploadRetryDelayMs = parseInt(args["dashboard-upload-retry-delay-ms"], 10);
   }
   if (args["dashboard-project"]) result.dashboardProject = args["dashboard-project"];
   if (args["dashboard-branch"]) result.dashboardBranch = args["dashboard-branch"];
@@ -472,6 +494,7 @@ function main(): void {
     buildSystem: opts.buildSystem,
     buildDir: opts.buildDir,
     buildTarget: opts.buildTarget,
+    artifactPath: opts.artifactPath,
     artifactBackend: opts.artifactBackend,
     artifactFallback: opts.artifactFallback,
     xcodeWorkspace: opts.xcodeWorkspace,
@@ -520,6 +543,7 @@ function main(): void {
     retainedWorktreeTtlHours: opts.retainedWorktreeTtlHours,
     workerTmpDir: opts.workerTmpDir,
     workerLabel: opts.workerLabel,
+    distributionManifest: opts.distributionManifest,
     env: opts.env,
     envInherit: opts.envInherit,
     envBlock: opts.envBlock,
@@ -527,6 +551,7 @@ function main(): void {
     includeMetal: opts.includeMetal,
     mutators: opts.mutators,
     mode: opts.mode,
+    executionMode: opts.executionMode,
     equivalentSuppression: opts.equivalentSuppression,
     plugins: opts.plugins,
     pluginDirs: opts.pluginDirs,
@@ -535,6 +560,8 @@ function main(): void {
     dashboardUploadUrl: opts.dashboardUploadUrl,
     dashboardVersion: opts.dashboardVersion,
     dashboardRetentionDays: opts.dashboardRetentionDays,
+    dashboardUploadRetries: opts.dashboardUploadRetries,
+    dashboardUploadRetryDelayMs: opts.dashboardUploadRetryDelayMs,
     dashboardProject: opts.dashboardProject,
     dashboardBranch: opts.dashboardBranch,
     dashboardCommit: opts.dashboardCommit,

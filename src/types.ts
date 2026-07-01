@@ -36,6 +36,7 @@ export interface MutationConfig {
   buildSystem?: string;
   buildDir?: string;
   buildTarget?: string;
+  artifactPath?: string;
   artifactBackend?: string;
   artifactFallback?: string;
   xcodeWorkspace?: string;
@@ -84,6 +85,7 @@ export interface MutationConfig {
   retainedWorktreeTtlHours?: number;
   workerTmpDir?: string;
   workerLabel?: string;
+  distributionManifest?: string;
   env?: string[];
   envInherit?: string[];
   envBlock?: string[];
@@ -91,6 +93,7 @@ export interface MutationConfig {
   includeMetal?: boolean;
   mutators?: string;
   mode?: string;
+  executionMode?: string;
   equivalentSuppression?: string;
   plugins?: string[];
   pluginDirs?: string[];
@@ -99,6 +102,8 @@ export interface MutationConfig {
   dashboardUploadUrl?: string;
   dashboardVersion?: string;
   dashboardRetentionDays?: number;
+  dashboardUploadRetries?: number;
+  dashboardUploadRetryDelayMs?: number;
   dashboardProject?: string;
   dashboardBranch?: string;
   dashboardCommit?: string;
@@ -142,6 +147,7 @@ export interface MutationResult {
     failureReason?: string;
   };
   resourceIsolation?: Record<string, unknown>;
+  provider?: Record<string, unknown>;
   error: string | null;
   elapsedMs: number;
 }

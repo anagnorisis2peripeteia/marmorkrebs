@@ -60,6 +60,9 @@ executed. Use `--tool mull` only for C++-only runs.
 
 This is the supported C++ gate path for both local and PR-based workflows in
 this repo. For Metal-enabled projects, use `--tool stryker-cxx`.
+Add `--distribution-manifest <path>` when a CI or proof flow needs to archive
+the exact selected shard, worker label, redacted commands, and mutant IDs that
+`stryker-cxx` executed.
 
 ```bash
 marmorkrebs \
@@ -85,7 +88,11 @@ binary. For Metal-capable invocation, use `--tool stryker-cxx` and
 
 Marmorkrebs forwards compiled artifact selectors directly to `stryker-cxx`.
 Use them only when the selected `stryker-cxx` binary supports the requested
-backend:
+backend. `compiled-library` supports CMake/CTest plus explicit Make/Ninja/Meson
+library targets when an original `lib<target>` artifact already exists.
+`compiled-object` supports CMake/CTest and explicit Make/Ninja/Meson/Bazel
+targets when `--artifact-path` names the linked artifact and the selected build
+emits `compile_commands.json`; Xcode object support remains provider-blocked.
 
 ```bash
 --artifact-backend compiled-object --artifact-fallback source-overlay
@@ -100,6 +107,10 @@ Optional controls:
 - `--include-metal` includes `.metal` files in the C++ source mutation pass.
 - `--mutators <names>` restricts the engine to a comma-separated mutator list.
 - `--mode clang-ast` asks `stryker-cxx` to generate candidates from libclang cursor ranges before rewriting source.
+- `--execution-mode <source-overlay|mutant-switch>` forwards the native
+  `stryker-cxx` execution model selector. Use `mutant-switch` when the selected
+  provider can build guarded artifacts; fallback evidence remains available in
+  the normalized provider metadata.
 - `--equivalent-suppression <off|conservative|aggressive>` forwards native
   equivalent/noise suppression; use `off` when proof requires every discovered
   mutant to execute.
@@ -109,8 +120,8 @@ Optional controls:
 - `--incremental` with `--baseline-file <path>` reuses compatible previous mutant results; add `--baseline-max-age-days <n>` and `--baseline-branch <name>` when cache reuse must be bounded by freshness or branch lifecycle.
 - `--batch-mutants --batch-size <n>` batches compatible mutants in isolated worktrees and splits failed batches for attribution.
 - `--worktree-mode <copy|git-worktree>` selects isolated worker mode for batching or retained debug workers.
-- `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` selects the native `stryker-cxx` artifact backend. Compiled artifact execution is currently a CMake/CTest `stryker-cxx` feature; Marmorkrebs forwards the flag and lets the provider preflight unsupported build systems.
-- `--artifact-fallback <none|source-overlay>` forwards the provider fallback policy.
+- `--artifact-backend <source-overlay|compiled-executable|compiled-library|compiled-object>` selects the native `stryker-cxx` artifact backend. `compiled-executable` supports CMake/CTest and simple Make/Ninja/Meson/Bazel/Xcode executable targets; Bazel requires an explicit `--build-target` label and `--test-binary` artifact path, and Xcode requires `--test-binary` plus either `--build-target` or `--xcode-scheme`. `compiled-library` supports CMake/CTest, explicit Make/Ninja/Meson `lib<target>` artifacts, and Bazel/Xcode libraries when `--artifact-path` names the original artifact to swap/restore. `compiled-object` supports CMake/CTest and explicit Make/Ninja/Meson/Bazel targets when `--artifact-path` names the linked artifact and the build emits `compile_commands.json`; Xcode object support remains provider-blocked. Marmorkrebs forwards the flags and lets the provider preflight unsupported build systems.
+- `--artifact-fallback <none|source-overlay>` forwards the provider fallback policy; when fallback is used, normalized `provider` metadata preserves the requested backend, actual backend, and fallback reason.
 - `--build-system <name>` lets `stryker-cxx` synthesize CMake/CTest/Ninja/Make/Meson/Bazel build/test commands when explicit commands are not supplied; `--check-system <clang-tidy|cppcheck>` plus `--check-args <args>` can synthesize common static-check commands.
 - `--test-framework <name>` with optional `--test-binary` lets `stryker-cxx` synthesize GoogleTest, Catch2, doctest, or XCTest commands; gtest/catch2/doctest can discover one repo-local test executable automatically, while XCTest still needs a bundle/binary.
 - `--plugin`, `--plugin-dir`, and `--reporter` forward local `stryker-cxx` plugin manifests, provider hooks, and reporter requests.
@@ -121,7 +132,7 @@ Optional controls:
   add `--env-inherit <KEY,...>` or `--env-block <KEY,...>` when inherited
   process environment needs an explicit allow/deny policy. Retained workers
   should use `copy` or `git-worktree` mode.
-- `--dashboard-export` writes a compact dashboard payload; `--dashboard-upload-url` posts it only to the explicit URL supplied by the caller.
+- `--dashboard-export` writes a compact dashboard payload; `--dashboard-upload-url` posts it only to the explicit URL supplied by the caller. Add `--dashboard-upload-retries` and `--dashboard-upload-retry-delay-ms` when hosted dashboard uploads should record retry-attempt metadata.
 - `--threshold-high`, `--threshold-low`, and `--threshold-break` forward Stryker-style score bands.
 - `--skip-initial-test` is available for legacy/debug flows, but PR gates should normally keep the dry run enabled.
 - `--dry-run-only` validates the build/test lifecycle without executing mutants.
@@ -136,6 +147,10 @@ A successful run exits zero and writes a `MutationResult` JSON object to stdout.
 - `thresholds`: optional `stryker-cxx` high/low/break band result.
 - `dryRun`: optional `stryker-cxx` initial build/test validation result.
 - `baseline`: optional `stryker-cxx` cache hit/miss/write metadata.
+- `provider`: optional provider-native metadata from `stryker-cxx.report.v1`,
+  including execution mode, requested/actual artifact backend, fallback reason,
+  scheduler, lifecycle, artifact placement, mutant-switch, and project-analysis
+  evidence when present.
 - `totalMutants`: number of mutants reported for the scoped run.
 - `ignored`: mutants suppressed by Stryker-style ignore comments and excluded from score.
 - `noCoverage`: mutants skipped because supplied coverage data did not cover their line, plus legacy non-viable C++ counts normalized into Marmorkrebs' common shape.

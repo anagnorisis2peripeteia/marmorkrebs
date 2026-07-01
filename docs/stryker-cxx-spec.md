@@ -38,7 +38,9 @@ The current Marmorkrebs engine already provides the seed implementation:
   literals by default.
 - Applies one source mutation at a time.
 - Runs caller-supplied build and test commands.
-- Classifies mutants as `KILLED`, `SURVIVED`, or `BUILD_ERROR`.
+- Classifies mutants with the native `stryker-cxx` status vocabulary:
+  `KILLED`, `SURVIVED`, `BUILD_ERROR`, `CHECK_ERROR`, `NO_COVERAGE`,
+  `TIMEOUT`, `IGNORED`, and `RUNTIME_ERROR`.
 - Emits JSON with target files, totals, score, and per-mutant records.
 - Supports `--max-mutants`, `--include-metal`, and `--mutators`.
 
@@ -83,6 +85,9 @@ Mutation options:
 - `--include-metal`: include `.metal` files in token-level mode.
 - `--mode token|clang|clang-ast`: choose mutation implementation, default
   `token` initially.
+- `--execution-mode source-overlay|mutant-switch`: choose the native execution
+  model. Marmorkrebs forwards this unchanged and preserves provider fallback
+  evidence from `stryker-cxx.report.v1`.
 - `--equivalent-suppression off|conservative|aggressive`: choose native
   equivalent/noise suppression mode; `conservative` is the standalone default
   and covers generated-code markers, duplicate logical/bitwise operands,
@@ -496,9 +501,14 @@ Adapter plan:
 
 Current status: Marmorkrebs has a first-class `--tool stryker-cxx` path, can use
 `--stryker-cxx-bin` (or `STRYKER_CXX_BIN`) to select a binary, forwards dry-run,
-checker, coverage, test-level coverage selection, baseline-cache policy, plugin, resource-control, build/test adapter, framework-discovery, timeout-calibration, threshold-band, artifact-backend, and equivalent-suppression options, treats
-failed `stryker-cxx` dry runs as infrastructure errors, and accepts
-`stryker-cxx.report.v1` through the C++ parser.
+line suffixes as `--lines`, checker, coverage, test-level coverage selection,
+baseline-cache policy, plugin, resource-control, build/test adapter,
+framework-discovery, timeout-calibration, threshold-band, artifact-backend,
+artifact-fallback, execution-mode, and equivalent-suppression options, treats failed
+`stryker-cxx` dry runs as infrastructure errors, and accepts
+`stryker-cxx.report.v1` through the C++ parser while preserving provider
+execution, requested/actual artifact backend, fallback, scheduler, lifecycle,
+artifact-placement, mutant-switch, and project-analysis metadata.
 
 Marmorkrebs result mapping:
 
@@ -633,8 +643,10 @@ Conventions are part of compatibility:
 - PR and local production flows should use `--tool stryker-cxx`; `cxx-source` is
   historical migration-only behavior and must not be the default path for new gate
   flows.
-- Native `stryker-cxx` status vocabularies (`KILLED`, `SURVIVED`, etc.) stay
-  stable and are only normalized once at Marmorkrebs’ orchestration boundary.
+- Native `stryker-cxx` status vocabularies (`KILLED`, `SURVIVED`,
+  `BUILD_ERROR`, `CHECK_ERROR`, `NO_COVERAGE`, `TIMEOUT`, `IGNORED`, and
+  `RUNTIME_ERROR`) stay stable and are only normalized once at Marmorkrebs'
+  orchestration boundary.
 - CLI flags remain kebab-case; provider config/report fields remain
   lowerCamelCase.
 - Shell command construction should stay shell-safe and preserve explicit env

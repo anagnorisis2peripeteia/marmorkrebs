@@ -59,8 +59,19 @@ interface CxxReport {
     failureReason?: string;
   };
   execution?: {
+    executionMode?: string;
+    requestedExecutionMode?: string;
+    artifactBackend?: string;
+    requestedArtifactBackend?: string;
+    artifactFallback?: string;
+    artifactFallbackReason?: string;
+    testScheduler?: Record<string, unknown>;
+    mutantSwitch?: Record<string, unknown>;
     resourceIsolation?: Record<string, unknown>;
   };
+  lifecycle?: Record<string, unknown>;
+  artifactPlacement?: Record<string, unknown>;
+  projectAnalysis?: Record<string, unknown>;
 }
 
 interface CxxTargetSpec {
@@ -225,6 +236,9 @@ function buildExternalCxxSourceInvocation(
   if (config.buildTarget) {
     parts.push("--build-target", `'${shellEscape(config.buildTarget)}'`);
   }
+  if (config.artifactPath) {
+    parts.push("--artifact-path", `'${shellEscape(config.artifactPath)}'`);
+  }
   if (config.artifactBackend) {
     parts.push("--artifact-backend", `'${shellEscape(config.artifactBackend)}'`);
   }
@@ -285,6 +299,9 @@ function buildExternalCxxSourceInvocation(
   if (config.mode) {
     parts.push("--mode", `'${shellEscape(config.mode)}'`);
   }
+  if (config.executionMode) {
+    parts.push("--execution-mode", `'${shellEscape(config.executionMode)}'`);
+  }
   if (config.equivalentSuppression) {
     parts.push("--equivalent-suppression", `'${shellEscape(config.equivalentSuppression)}'`);
   }
@@ -320,6 +337,12 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.dashboardRetentionDays !== undefined) {
     parts.push("--dashboard-retention-days", String(config.dashboardRetentionDays));
+  }
+  if (config.dashboardUploadRetries !== undefined) {
+    parts.push("--dashboard-upload-retries", String(config.dashboardUploadRetries));
+  }
+  if (config.dashboardUploadRetryDelayMs !== undefined) {
+    parts.push("--dashboard-upload-retry-delay-ms", String(config.dashboardUploadRetryDelayMs));
   }
   if (config.dashboardProject) {
     parts.push("--dashboard-project", `'${shellEscape(config.dashboardProject)}'`);
@@ -432,6 +455,9 @@ function buildExternalCxxSourceInvocation(
   }
   if (config.workerLabel) {
     parts.push("--worker-label", `'${shellEscape(config.workerLabel)}'`);
+  }
+  if (config.distributionManifest) {
+    parts.push("--distribution-manifest", `'${shellEscape(config.distributionManifest)}'`);
   }
   for (const item of config.env ?? []) {
     parts.push("--env", `'${shellEscape(item)}'`);
@@ -551,6 +577,21 @@ export function parseCxxSource(output: string, tool: MutationTool = "stryker-cxx
     thresholds: report.thresholds,
     dryRun: report.dryRun,
     resourceIsolation: report.execution?.resourceIsolation,
+    provider: {
+      name: tool,
+      schemaVersion: report.schemaVersion,
+      executionMode: report.execution?.executionMode,
+      requestedExecutionMode: report.execution?.requestedExecutionMode,
+      artifactBackend: report.execution?.artifactBackend,
+      requestedArtifactBackend: report.execution?.requestedArtifactBackend,
+      artifactFallback: report.execution?.artifactFallback,
+      artifactFallbackReason: report.execution?.artifactFallbackReason,
+      testScheduler: report.execution?.testScheduler,
+      mutantSwitch: report.execution?.mutantSwitch,
+      lifecycle: report.lifecycle,
+      artifactPlacement: report.artifactPlacement,
+      projectAnalysis: report.projectAnalysis,
+    },
     error: dryRunFailed ? report.dryRun?.failureReason ?? "stryker-cxx dry run failed" : null,
     elapsedMs: 0,
   };

@@ -72,6 +72,7 @@ describe("parseCxxSource", () => {
       buildSystem: "cmake",
       buildDir: "build",
       buildTarget: "target",
+      artifactPath: "bazel-bin/lib/libtarget.a",
       artifactBackend: "compiled-object",
       artifactFallback: "source-overlay",
       xcodeWorkspace: "App.xcworkspace",
@@ -96,6 +97,7 @@ describe("parseCxxSource", () => {
       thresholdLow: 0.7,
       thresholdBreak: 0.5,
       mode: "clang-ast",
+      executionMode: "mutant-switch",
       equivalentSuppression: "off",
       coverageFile: "coverage.json",
       coverageProvider: "llvm-cov",
@@ -115,6 +117,7 @@ describe("parseCxxSource", () => {
       retainedWorktreeTtlHours: 24,
       workerTmpDir: "/tmp/stryker-cxx-workers",
       workerLabel: "pr-96205-proof",
+      distributionManifest: "distribution.json",
       env: ["STRYKER_CXX_FLAG=yes"],
       envInherit: ["PATH"],
       envBlock: ["GITHUB_TOKEN"],
@@ -125,6 +128,8 @@ describe("parseCxxSource", () => {
       dashboardUploadUrl: "https://dashboard.example/upload",
       dashboardVersion: "1",
       dashboardRetentionDays: 14,
+      dashboardUploadRetries: 2,
+      dashboardUploadRetryDelayMs: 0,
       dashboardProject: "openclaw/stryker-cxx-fixture",
       dashboardBranch: "feature/dashboard",
       dashboardCommit: "abc123",
@@ -140,6 +145,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--build-system 'cmake'"));
     assert.ok(command.includes("--build-dir 'build'"));
     assert.ok(command.includes("--build-target 'target'"));
+    assert.ok(command.includes("--artifact-path 'bazel-bin/lib/libtarget.a'"));
     assert.ok(command.includes("--artifact-backend 'compiled-object'"));
     assert.ok(command.includes("--artifact-fallback 'source-overlay'"));
     assert.ok(command.includes("--xcode-workspace 'App.xcworkspace'"));
@@ -163,6 +169,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--threshold-low 0.7"));
     assert.ok(command.includes("--threshold-break 0.5"));
     assert.ok(command.includes("--mode 'clang-ast'"));
+    assert.ok(command.includes("--execution-mode 'mutant-switch'"));
     assert.ok(command.includes("--equivalent-suppression 'off'"));
     assert.ok(command.includes("--coverage-file 'coverage.json'"));
     assert.ok(command.includes("--coverage-provider 'llvm-cov'"));
@@ -186,6 +193,7 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--retained-worktree-ttl-hours 24"));
     assert.ok(command.includes("--worker-tmp-dir '/tmp/stryker-cxx-workers'"));
     assert.ok(command.includes("--worker-label 'pr-96205-proof'"));
+    assert.ok(command.includes("--distribution-manifest 'distribution.json'"));
     assert.ok(command.includes("--env 'STRYKER_CXX_FLAG=yes'"));
     assert.ok(command.includes("--env-inherit 'PATH'"));
     assert.ok(command.includes("--env-block 'GITHUB_TOKEN'"));
@@ -196,6 +204,8 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--dashboard-upload-url 'https://dashboard.example/upload'"));
     assert.ok(command.includes("--dashboard-version '1'"));
     assert.ok(command.includes("--dashboard-retention-days 14"));
+    assert.ok(command.includes("--dashboard-upload-retries 2"));
+    assert.ok(command.includes("--dashboard-upload-retry-delay-ms 0"));
     assert.ok(command.includes("--dashboard-project 'openclaw/stryker-cxx-fixture'"));
     assert.ok(command.includes("--dashboard-branch 'feature/dashboard'"));
     assert.ok(command.includes("--dashboard-commit 'abc123'"));
@@ -271,12 +281,30 @@ describe("parseCxxSource", () => {
       thresholds: { high: 0.9, low: 0.7, break: 0.5, status: "low" },
       dryRun: { status: "PASSED" },
       execution: {
+        executionMode: "mutant-switch",
+        requestedExecutionMode: "mutant-switch",
+        artifactBackend: "source-overlay",
+        requestedArtifactBackend: "compiled-executable",
+        artifactFallback: "source-overlay",
+        artifactFallbackReason:
+          "--artifact-backend compiled-executable does not support --build-system meson; falling back to source-overlay",
+        testScheduler: {
+          schemaVersion: "stryker-cxx.test-scheduler.v1",
+          sessions: 1,
+        },
+        mutantSwitch: {
+          enabled: true,
+          runtimeGuardCount: 1,
+        },
         resourceIsolation: {
           worktreeMode: "copy",
           environmentKeys: ["SECRET_TOKEN"],
           redaction: { enabled: true, replacement: "[REDACTED]" },
         },
       },
+      lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
+      artifactPlacement: { mode: "mutant-switch" },
+      projectAnalysis: { confidence: "high" },
       mutants: [
         {
           id: "aten/src/Reduce.mm:42:12:ConditionalBoundary:abc123",
@@ -336,6 +364,28 @@ describe("parseCxxSource", () => {
       worktreeMode: "copy",
       environmentKeys: ["SECRET_TOKEN"],
       redaction: { enabled: true, replacement: "[REDACTED]" },
+    });
+    assert.deepEqual(result.provider, {
+      name: "stryker-cxx",
+      schemaVersion: "stryker-cxx.report.v1",
+      executionMode: "mutant-switch",
+      requestedExecutionMode: "mutant-switch",
+      artifactBackend: "source-overlay",
+      requestedArtifactBackend: "compiled-executable",
+      artifactFallback: "source-overlay",
+      artifactFallbackReason:
+        "--artifact-backend compiled-executable does not support --build-system meson; falling back to source-overlay",
+      testScheduler: {
+        schemaVersion: "stryker-cxx.test-scheduler.v1",
+        sessions: 1,
+      },
+      mutantSwitch: {
+        enabled: true,
+        runtimeGuardCount: 1,
+      },
+      lifecycle: { schemaVersion: "stryker-cxx.lifecycle.v1" },
+      artifactPlacement: { mode: "mutant-switch" },
+      projectAnalysis: { confidence: "high" },
     });
     assert.equal(result.survivingMutants.length, 1);
     assert.equal(result.survivingMutants[0].file, "aten/src/Reduce.mm");
