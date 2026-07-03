@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import { parseCliArgs, UsageError } from "./cli-args.js";
 
 const argv = (...rest: string[]) => ["node", "cli.js", ...rest];
@@ -13,14 +14,14 @@ describe("parseCliArgs", () => {
   it("parses tool, dir, and comma-separated changed files", () => {
     const o = parseCliArgs(argv("--tool", "gomu", "--dir", "/repo", "--changed-files", "a.go, b.go,"));
     assert.equal(o.tool, "gomu");
-    assert.equal(o.dir, "/repo");
+    assert.equal(o.dir, resolve("/repo")); // resolve(): "D:\\repo" on Windows
     assert.deepEqual(o.changedFiles, ["a.go", "b.go"]);
   });
 
   it("parses boolean flags without swallowing the next arg", () => {
     const o = parseCliArgs(argv("--tool", "gomu", "--allow-empty", "--dir", "/repo"));
     assert.equal(o.allowEmpty, true);
-    assert.equal(o.dir, "/repo");
+    assert.equal(o.dir, resolve("/repo"));
   });
 
   it("defaults allow-empty to undefined (fail-closed posture)", () => {
