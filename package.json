@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test 'dist/**/*.test.js'",
+    "test": "node scripts/run-tests.mjs",
     "check": "tsc --noEmit",
     "lint": "node scripts/lint.mjs",
     "validate:stryker-cxx-provider": "node scripts/validate-stryker-cxx-provider.mjs",

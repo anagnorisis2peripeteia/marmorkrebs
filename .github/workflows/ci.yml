@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  provider:
-    name: provider checks (${{ matrix.os }}, node ${{ matrix.node }})
+  test:
+    name: build + test (${{ matrix.os }}, node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,3 +24,36 @@ jobs:
         run: npm run check && npm run build && npm test
       - name: Provider bridge validation
         run: npm run validate:stryker-cxx-provider
+
+  # Live-fire the real mutation tools through runMutationAnalysis (the
+  # no-dormant-gates harness). Installs are cached; the fixtures are tiny.
+  providers:
+    name: provider validation (real tools)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install mutation tools
+        run: |
+          go install github.com/sivchari/gomu/cmd/gomu@latest
+          go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+          pip install mutmut pytest
+          curl -sL "https://github.com/sourcefrog/cargo-mutants/releases/download/v27.1.0/cargo-mutants-x86_64-unknown-linux-gnu.tar.gz" | tar xz -C "$HOME/.cargo/bin" cargo-mutants
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies and build
+        run: npm install && npm run build
+      - name: Validate all provider lanes
+        run: |
+          for tool in gomu go-mutesting cargo-mutants mutmut; do
+            node scripts/validate-provider.mjs "$tool" || exit 1
+          done
