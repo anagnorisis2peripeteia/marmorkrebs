@@ -32,24 +32,12 @@ import {
   type MutationTool,
 } from "./types.js";
 
-// Adapter lanes that have NEVER been validated against their real tool (2026-07-03
-// audit). The gomu lane shipped broken for three weeks because nothing forced a
-// live-fire before a profile depended on it; these three are known-wrong today:
-//   cargo-mutants — `--json` is a --list-only flag and results are written to
-//     mutants.out/outcomes.json, never stdout (adapter passes --json to a run and
-//     parses stdout NDJSON with a guessed schema);
-//   mutmut — --paths-to-mutate/--runner are mutmut-2.x flags (3.x is config-file
-//     driven) and `mutmut results --json` does not exist in either era;
-//   go-mutesting — upstream zimmski/go-mutesting finds 0 mutants on modern Go
-//     modules (proven on a live fixture); prefer gomu for Go.
-// A quarantined lane refuses to run rather than produce plausible wrongness. To
-// lift: fix the adapter against a real install, add a fixtures/<tool> project, and
-// make `node scripts/validate-provider.mjs <tool>` pass.
-const QUARANTINED_TOOLS: Partial<Record<MutationTool, string>> = {
-  "cargo-mutants": "adapter passes a --list-only --json flag and reads stdout; real results live in mutants.out/outcomes.json",
-  mutmut: "adapter uses mutmut-2.x-only flags and a `results --json` subcommand that does not exist",
-  "go-mutesting": "upstream go-mutesting finds 0 mutants on modern Go modules; use gomu instead",
-};
+// Lanes with a known-broken or never-validated adapter go here and hard-error
+// instead of producing plausible wrongness (see 2026-07-03 audit — the gomu lane
+// shipped broken for three weeks). Lifting an entry requires fixing the adapter
+// against a REAL install, adding a fixtures/<tool> project, and a passing
+// `node scripts/validate-provider.mjs <tool>`. All lanes validated as of 2026-07-03.
+const QUARANTINED_TOOLS: Partial<Record<MutationTool, string>> = {};
 
 interface ExecEvidence {
   exitCode: number;
@@ -262,7 +250,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
     case "cargo-mutants":
       return buildCargoMutantsCommand(sourceFiles, workDir);
     case "mutmut":
-      return buildMutmutCommand(sourceFiles, workDir, config.testCommand);
+      // mutmut 3 is config-driven (repo [mutmut] section); no per-call test command.
+      return buildMutmutCommand(sourceFiles, workDir);
     case "gomu":
       return buildGomuCommand(sourceFiles, workDir);
     case "stryker-cxx":
@@ -283,7 +272,7 @@ function parseOutput(
   const tool = config.tool;
   switch (tool) {
     case "go-mutesting":
-      return parseGoMutesting(stdout + "\n" + stderr);
+      return parseGoMutesting(stdout + "\n" + stderr, sourceFiles);
     case "gomu":
       // Package-dir runs mutate whole packages; scope scoring to the PR's files.
       return parseGomu(stdout, sourceFiles);
@@ -294,7 +283,8 @@ function parseOutput(
     case "cargo-mutants":
       return parseCargoMutants(stdout);
     case "mutmut":
-      return parseMutmut(stdout);
+      // mutmut mutates everything under source_paths; scope scoring to the PR's files.
+      return parseMutmut(stdout, sourceFiles);
     case "stryker-cxx":
       return parseCxxSource(stdout, tool, config);
     case "mull":

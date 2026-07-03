@@ -12,10 +12,10 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 |---|---|---|
 | `stryker` | JS/TS (Stryker) | validated in use |
 | `stryker-net` | C# / .NET (Stryker.NET) | validated in use |
-| `mutmut` | Python | **quarantined** — adapter never validated; known-wrong flags |
-| `cargo-mutants` | Rust | **quarantined** — adapter never validated; wrong output channel |
-| `go-mutesting` | Go | **quarantined** — upstream dead on modern Go modules; use `gomu` |
-| `gomu` | Go | validated (`npm run validate:provider gomu`) |
+| `mutmut` | Python | validated 2026-07-03 (mutmut 3.6; repo needs a `[mutmut] source_paths` config) |
+| `cargo-mutants` | Rust | validated 2026-07-03 (v27.1; needs a rust toolchain at runtime) |
+| `go-mutesting` | Go | validated 2026-07-03 (**avito-tech fork only** — zimmski upstream finds 0 mutants on Go modules) |
+| `gomu` | Go | validated 2026-07-03 (`npm run validate:provider gomu`) |
 | `stryker-cxx` | C++/ObjC++/Metal | validated in use (`validate:stryker-cxx-provider`) |
 | `mull` | C++/ObjC++ (optional; use when you want the Mull path) | shares the stryker-cxx engine |
 
@@ -23,7 +23,8 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 
 **Fail-closed contract:** a result only counts with evidence. The runner reconciles the
 child exit code/signal against the parsed report (`reconcileResult`); a zero-mutant run is
-an error unless `--allow-empty` is passed, and a quarantined lane refuses to run rather
+an error unless `--allow-empty` is passed, and a quarantined lane (runner.ts
+`QUARANTINED_TOOLS` — empty since 2026-07-03, all lanes validated) refuses to run rather
 than produce plausible wrongness. A lane leaves quarantine only when a `fixtures/<tool>`
 project passes `node scripts/validate-provider.mjs <tool>` against the real binary —
 parser unit tests alone cannot detect a wrong CLI flag or a report written to disk

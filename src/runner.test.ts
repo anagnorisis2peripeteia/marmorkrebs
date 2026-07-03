@@ -83,20 +83,6 @@ describe("reconcileResult (fail-closed net)", () => {
   });
 });
 
-describe("quarantined lanes", () => {
-  for (const [tool, file] of [
-    ["cargo-mutants", "x.rs"],
-    ["mutmut", "x.py"],
-    ["go-mutesting", "x.go"],
-  ] as const) {
-    it(`${tool} refuses to run`, () => {
-      const r = runMutationAnalysis("/nonexistent-dir", [file], { tool } as MutationConfig);
-      assert.match(r.error ?? "", /quarantined/);
-      assert.equal(r.totalMutants, 0);
-    });
-  }
-});
-
 describe("missing binary is an error, not a pass (integration)", () => {
   it("gomu absent from PATH -> result.error set", () => {
     const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-nobin-"));

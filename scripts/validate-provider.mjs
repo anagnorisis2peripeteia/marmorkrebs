@@ -29,6 +29,15 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { runMutationAnalysis } = await import(join(ROOT, "dist/runner.js"));
 
+// Tool binaries often live outside a lean shell's PATH; make the validator (and the
+// runs it spawns) see the standard per-user install dirs.
+const EXTRA_BIN_DIRS = [
+  `${process.env.HOME}/.cargo/bin`,
+  `${process.env.HOME}/go/bin`,
+  "/opt/homebrew/bin",
+];
+process.env.PATH = `${EXTRA_BIN_DIRS.join(":")}:${process.env.PATH}`;
+
 const SPECS = {
   gomu: {
     binary: "gomu",
@@ -39,8 +48,33 @@ const SPECS = {
     noSurvivorsIn: ["pkg/d.go"], // unchanged, untested neighbour -> must be filtered out
     forbiddenArtifacts: [".gomu_history.json", "mutation-report.json"],
   },
-  // Add a spec (and a fixtures/<tool> project) when lifting a lane out of
-  // quarantine: cargo-mutants, mutmut, go-mutesting have none on purpose.
+  "go-mutesting": {
+    binary: "go-mutesting", // avito-tech fork; zimmski upstream finds 0 mutants on Go modules
+    fixture: "fixtures/gomu",
+    changedFiles: ["a.go", "b.go"],
+    minMutants: 2,
+    survivorsIn: ["b.go"],
+    noSurvivorsIn: ["pkg/d.go"],
+    forbiddenArtifacts: ["mutation-report.json"],
+  },
+  "cargo-mutants": {
+    binary: "cargo-mutants",
+    fixture: "fixtures/cargo-mutants",
+    changedFiles: ["src/lib.rs", "src/untested.rs"],
+    minMutants: 8,
+    survivorsIn: ["src/untested.rs"],
+    noSurvivorsIn: ["src/other.rs"], // unchanged neighbour excluded via --file scoping
+    forbiddenArtifacts: ["mutants.out"],
+  },
+  mutmut: {
+    binary: "mutmut",
+    fixture: "fixtures/mutmut",
+    changedFiles: ["calclib/tested.py", "calclib/untested.py"],
+    minMutants: 2,
+    survivorsIn: ["calclib/untested.py"], // reported as no-tests -> no_coverage survivor
+    noSurvivorsIn: ["calclib/neighbor.py"],
+    forbiddenArtifacts: ["mutants"],
+  },
 };
 
 function binaryPath(name) {
