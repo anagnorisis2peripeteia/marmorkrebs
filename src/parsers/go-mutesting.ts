@@ -51,7 +51,8 @@ export function parseGoMutesting(output: string): MutationResult {
 }
 
 export function buildGoMutestingCommand(sourceFiles: string[], workDir: string): string {
-  return `cd '${shellEscape(workDir)}' && go-mutesting ${sourceFiles.join(" ")} 2>&1`;
+  const fileArgs = sourceFiles.map((f) => `'${shellEscape(f)}'`).join(" ");
+  return `cd '${shellEscape(workDir)}' && go-mutesting ${fileArgs} 2>&1`;
 }
 
 function shellEscape(s: string): string {

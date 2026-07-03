@@ -8,10 +8,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test dist/**/*.test.js",
+    "test": "node --test 'dist/**/*.test.js'",
     "check": "tsc --noEmit",
     "lint": "node scripts/lint.mjs",
-    "validate:stryker-cxx-provider": "node scripts/validate-stryker-cxx-provider.mjs"
+    "validate:stryker-cxx-provider": "node scripts/validate-stryker-cxx-provider.mjs",
+    "validate:provider": "node scripts/validate-provider.mjs",
+    "validate:providers": "node scripts/validate-provider.mjs --all"
   },
   "engines": {
     "node": ">=20"

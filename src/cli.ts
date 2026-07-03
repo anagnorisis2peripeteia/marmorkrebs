@@ -63,6 +63,7 @@ Options:
   --xctest-skip-testing <t> stryker-cxx only: XCTest skip-testing target(s), commaable
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
+  --allow-empty             Let a zero-mutant result pass (default: a 0-mutant run is an error)
   --threshold-high <0-1>    stryker-cxx only: healthy score band
   --threshold-low <0-1>     stryker-cxx only: warning score band
   --threshold-break <0-1>   stryker-cxx only: failing score band
@@ -196,6 +197,7 @@ function parseCliArgs(argv: string[]): {
   xctestSkipTesting?: string[];
   timeout?: number;
   threshold?: number;
+  allowEmpty?: boolean;
   thresholdHigh?: number;
   thresholdLow?: number;
   thresholdBreak?: number;
@@ -261,6 +263,7 @@ function parseCliArgs(argv: string[]): {
   crabbox?: CrabboxLeaseOptions;
 } {
   const BOOLEAN_FLAGS = new Set([
+    "allow-empty",
     "skip-sync",
     "include-metal",
     "skip-initial-test",
@@ -440,6 +443,7 @@ function parseCliArgs(argv: string[]): {
 
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
+  if ("allow-empty" in args) result.allowEmpty = true;
   if (args["remote-dir"]) result.remoteDir = args["remote-dir"];
   if (args.provider) {
     result.crabbox = { provider: args.provider };
@@ -544,6 +548,7 @@ function main(): void {
     since: opts.since,
     timeoutMs: opts.timeout,
     threshold: opts.threshold,
+    allowEmpty: opts.allowEmpty,
     thresholdHigh: opts.thresholdHigh,
     thresholdLow: opts.thresholdLow,
     thresholdBreak: opts.thresholdBreak,

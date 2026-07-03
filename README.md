@@ -8,18 +8,26 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 
 ## Supported mutation tools
 
-| Tool | Ecosystem |
-|---|---|
-| `stryker` | JS/TS (Stryker) |
-| `stryker-net` | C# / .NET (Stryker.NET) |
-| `mutmut` | Python |
-| `cargo-mutants` | Rust |
-| `go-mutesting` | Go |
-| `gomu` | Go |
-| `stryker-cxx` | C++/ObjC++/Metal |
-| `mull` | C++/ObjC++ (optional; use when you want the Mull path) |
+| Tool | Ecosystem | Status |
+|---|---|---|
+| `stryker` | JS/TS (Stryker) | validated in use |
+| `stryker-net` | C# / .NET (Stryker.NET) | validated in use |
+| `mutmut` | Python | **quarantined** — adapter never validated; known-wrong flags |
+| `cargo-mutants` | Rust | **quarantined** — adapter never validated; wrong output channel |
+| `go-mutesting` | Go | **quarantined** — upstream dead on modern Go modules; use `gomu` |
+| `gomu` | Go | validated (`npm run validate:provider gomu`) |
+| `stryker-cxx` | C++/ObjC++/Metal | validated in use (`validate:stryker-cxx-provider`) |
+| `mull` | C++/ObjC++ (optional; use when you want the Mull path) | shares the stryker-cxx engine |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
+
+**Fail-closed contract:** a result only counts with evidence. The runner reconciles the
+child exit code/signal against the parsed report (`reconcileResult`); a zero-mutant run is
+an error unless `--allow-empty` is passed, and a quarantined lane refuses to run rather
+than produce plausible wrongness. A lane leaves quarantine only when a `fixtures/<tool>`
+project passes `node scripts/validate-provider.mjs <tool>` against the real binary —
+parser unit tests alone cannot detect a wrong CLI flag or a report written to disk
+instead of stdout (that is exactly how the gomu lane shipped broken).
 
 ### C++ / ObjC++ / Metal
 

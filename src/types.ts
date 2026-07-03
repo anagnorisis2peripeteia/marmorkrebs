@@ -62,6 +62,8 @@ export interface MutationConfig {
   thresholdLow?: number;
   thresholdBreak?: number;
   timeoutMs?: number;
+  /** Allow a zero-mutant result to pass (default: fail closed — see reconcileResult). */
+  allowEmpty?: boolean;
   timeoutFactor?: number;
   timeoutConstantMs?: number;
   skipInitialTest?: boolean;

@@ -32,11 +32,85 @@ import {
   type MutationTool,
 } from "./types.js";
 
+// Adapter lanes that have NEVER been validated against their real tool (2026-07-03
+// audit). The gomu lane shipped broken for three weeks because nothing forced a
+// live-fire before a profile depended on it; these three are known-wrong today:
+//   cargo-mutants — `--json` is a --list-only flag and results are written to
+//     mutants.out/outcomes.json, never stdout (adapter passes --json to a run and
+//     parses stdout NDJSON with a guessed schema);
+//   mutmut — --paths-to-mutate/--runner are mutmut-2.x flags (3.x is config-file
+//     driven) and `mutmut results --json` does not exist in either era;
+//   go-mutesting — upstream zimmski/go-mutesting finds 0 mutants on modern Go
+//     modules (proven on a live fixture); prefer gomu for Go.
+// A quarantined lane refuses to run rather than produce plausible wrongness. To
+// lift: fix the adapter against a real install, add a fixtures/<tool> project, and
+// make `node scripts/validate-provider.mjs <tool>` pass.
+const QUARANTINED_TOOLS: Partial<Record<MutationTool, string>> = {
+  "cargo-mutants": "adapter passes a --list-only --json flag and reads stdout; real results live in mutants.out/outcomes.json",
+  mutmut: "adapter uses mutmut-2.x-only flags and a `results --json` subcommand that does not exist",
+  "go-mutesting": "upstream go-mutesting finds 0 mutants on modern Go modules; use gomu instead",
+};
+
+interface ExecEvidence {
+  exitCode: number;
+  signal: string | null;
+  spawnError: string | null;
+  stderr: string;
+}
+
+// Fail-closed reconciliation (2026-07-03 audit): a mutation result only counts with
+// evidence. Before this, a MISSING BINARY scored 100% and exited 0 — the child's
+// exit code was ignored and every parser scores an empty mutant set as 1.0.
+// Rules: an existing parse error wins; a spawn failure or kill signal is an error;
+// a zero-mutant result is an error when the tool exited non-zero (nothing ran), and
+// still an error on exit 0 unless config.allowEmpty says this diff legitimately has
+// nothing to mutate. A non-zero exit WITH parsed mutants is trusted — tools like
+// stryker exit non-zero on their own threshold verdicts, which are not ours to obey.
+export function reconcileResult(
+  parsed: MutationResult,
+  exec: ExecEvidence,
+  config: MutationConfig,
+): MutationResult {
+  if (parsed.error) return parsed;
+  const stderrTail = exec.stderr.trim().slice(-300);
+  if (exec.spawnError) {
+    return { ...parsed, error: `tool process failed to spawn: ${exec.spawnError}` };
+  }
+  if (exec.signal) {
+    return { ...parsed, error: `tool killed by ${exec.signal} (timeout?): ${stderrTail}` };
+  }
+  if (parsed.totalMutants === 0) {
+    if (exec.exitCode !== 0) {
+      return {
+        ...parsed,
+        error: `tool exited ${exec.exitCode} with no parseable result: ${stderrTail}`,
+      };
+    }
+    if (!config.allowEmpty) {
+      return {
+        ...parsed,
+        error:
+          "tool produced 0 mutants (exit 0) — refusing to score an empty run as a pass; " +
+          "pass --allow-empty if this diff legitimately has nothing to mutate",
+      };
+    }
+  }
+  return parsed;
+}
+
 export function runMutationAnalysis(
   repoDir: string,
   changedFiles: string[],
   config: MutationConfig,
 ): MutationResult {
+  const quarantine = QUARANTINED_TOOLS[config.tool];
+  if (quarantine) {
+    return {
+      ...EMPTY_RESULT,
+      tool: config.tool,
+      error: `${config.tool} lane is quarantined (never validated against the real tool): ${quarantine}. Fix the adapter and make scripts/validate-provider.mjs pass before use.`,
+    };
+  }
   if (!changedFiles.length) return { ...EMPTY_RESULT, tool: config.tool };
 
   const sourceFiles = filterSourceFiles(changedFiles, config.tool);
@@ -71,7 +145,12 @@ function runOnExistingLease(
     const result = crabboxExec(leaseId, command, timeoutMs);
 
     const parsed = parseOutput(config, result.stdout, result.stderr, sourceFiles);
-    return { ...parsed, elapsedMs: Date.now() - startMs };
+    const reconciled = reconcileResult(
+      parsed,
+      { exitCode: result.exitCode, signal: null, spawnError: null, stderr: result.stderr },
+      config,
+    );
+    return { ...reconciled, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
       ...EMPTY_RESULT,
@@ -99,7 +178,12 @@ function runInCrabbox(
     const result = crabboxExec(lease.id, command, timeoutMs);
 
     const parsed = parseOutput(config, result.stdout, result.stderr, sourceFiles);
-    return { ...parsed, elapsedMs: Date.now() - startMs };
+    const reconciled = reconcileResult(
+      parsed,
+      { exitCode: result.exitCode, signal: null, spawnError: null, stderr: result.stderr },
+      config,
+    );
+    return { ...reconciled, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
       ...EMPTY_RESULT,
@@ -146,7 +230,17 @@ function runLocally(
       }
     }
     const parsed = parseOutput(config, stdout, result.stderr ?? "", sourceFiles);
-    return { ...parsed, elapsedMs: Date.now() - startMs };
+    const reconciled = reconcileResult(
+      parsed,
+      {
+        exitCode: result.status ?? 1,
+        signal: result.signal ?? null,
+        spawnError: result.error ? String(result.error) : null,
+        stderr: result.stderr ?? "",
+      },
+      config,
+    );
+    return { ...reconciled, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
       ...EMPTY_RESULT,
