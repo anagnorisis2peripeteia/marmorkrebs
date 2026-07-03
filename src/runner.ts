@@ -70,7 +70,7 @@ function runOnExistingLease(
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(leaseId, command, timeoutMs);
 
-    const parsed = parseOutput(config, result.stdout, result.stderr);
+    const parsed = parseOutput(config, result.stdout, result.stderr, sourceFiles);
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -98,7 +98,7 @@ function runInCrabbox(
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(lease.id, command, timeoutMs);
 
-    const parsed = parseOutput(config, result.stdout, result.stderr);
+    const parsed = parseOutput(config, result.stdout, result.stderr, sourceFiles);
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -145,7 +145,7 @@ function runLocally(
         // fall back to stdout
       }
     }
-    const parsed = parseOutput(config, stdout, result.stderr ?? "");
+    const parsed = parseOutput(config, stdout, result.stderr ?? "", sourceFiles);
     return { ...parsed, elapsedMs: Date.now() - startMs };
   } catch (error) {
     return {
@@ -180,13 +180,19 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
   }
 }
 
-function parseOutput(config: MutationConfig, stdout: string, stderr: string): MutationResult {
+function parseOutput(
+  config: MutationConfig,
+  stdout: string,
+  stderr: string,
+  sourceFiles: string[] = [],
+): MutationResult {
   const tool = config.tool;
   switch (tool) {
     case "go-mutesting":
       return parseGoMutesting(stdout + "\n" + stderr);
     case "gomu":
-      return parseGomu(stdout);
+      // Package-dir runs mutate whole packages; scope scoring to the PR's files.
+      return parseGomu(stdout, sourceFiles);
     case "stryker":
       return parseStryker(stdout);
     case "stryker-net":

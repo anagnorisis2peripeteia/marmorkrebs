@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGomu } from "./gomu.js";
+import { buildGomuCommand, parseGomu } from "./gomu.js";
 
 describe("parseGomu", () => {
   it("parses gomu JSON report", () => {
@@ -135,5 +135,110 @@ describe("parseGomu", () => {
     };
     const result = parseGomu(JSON.stringify(report));
     assert.equal(result.survivingMutants[0].description, "true -> false");
+  });
+});
+
+describe("parseGomu multi-report stream", () => {
+  it("merges RS-separated per-file reports", () => {
+    const r1 = {
+      statistics: { killed: 2, survived: 1, timedOut: 0, errors: 0, notViable: 0, mutationScore: 66.7 },
+      results: [
+        {
+          mutant: { id: "a", filePath: "a.go", line: 3, type: "arithmetic_binary", original: "+", mutated: "-" },
+          status: "SURVIVED",
+        },
+      ],
+      duration: 1_000_000_000,
+    };
+    const r2 = {
+      statistics: { killed: 3, survived: 0, timedOut: 1, errors: 0, notViable: 1, mutationScore: 75 },
+      results: [
+        {
+          mutant: { id: "b", filePath: "b.go", line: 9, type: "conditional", original: "<", mutated: "<=" },
+          status: "TIMED_OUT",
+        },
+      ],
+      duration: 2_000_000_000,
+    };
+    const stream = JSON.stringify(r1) + "\n\u001e\n" + JSON.stringify(r2) + "\n\u001e\n";
+    const result = parseGomu(stream);
+    assert.equal(result.error, null);
+    assert.equal(result.killed, 5);
+    assert.equal(result.survived, 1);
+    assert.equal(result.timeout, 1);
+    assert.equal(result.totalMutants, 8);
+    assert.equal(result.score, 0.71);
+    assert.equal(result.survivingMutants.length, 2);
+    assert.equal(result.survivingMutants[0].file, "a.go");
+    assert.equal(result.survivingMutants[1].file, "b.go");
+    assert.equal(result.elapsedMs, 3000);
+  });
+});
+
+describe("buildGomuCommand", () => {
+  it("runs gomu once per unique package dir with a single positional each", () => {
+    const cmd = buildGomuCommand(["a.go", "pkg/b.go", "pkg/c.go"], "/repo");
+    assert.equal(cmd.match(/gomu run /g)?.length, 2);
+    assert.ok(cmd.includes("'.' 1>&2"));
+    assert.ok(cmd.includes("'pkg' 1>&2"));
+    assert.ok(!cmd.includes("'a.go'"), "must pass package dirs, not files");
+    assert.ok(cmd.startsWith("cd '/repo' && "));
+  });
+
+  it("scrubs gomu incremental history around every run", () => {
+    const cmd = buildGomuCommand(["a.go", "pkg/b.go"], "/repo");
+    assert.equal(cmd.match(/rm -f \.gomu_history\.json/g)?.length, 3);
+    assert.ok(cmd.includes("--incremental=false"));
+  });
+
+  it("collects the report file per run and emits an RS-separated stream", () => {
+    const cmd = buildGomuCommand(["a.go", "pkg/b.go"], "/repo");
+    assert.ok(cmd.includes('mv -f mutation-report.json "$RPT/r0.json"'));
+    assert.ok(cmd.includes('mv -f mutation-report.json "$RPT/r1.json"'));
+    assert.ok(cmd.includes("printf '\\n\\036\\n'"));
+    assert.ok(cmd.includes('rm -rf "$RPT"'));
+    assert.ok(!cmd.includes("2>&1"), "stdout must stay pure JSON stream");
+  });
+
+  it("strips focus line-range suffixes when deriving dirs", () => {
+    const cmd = buildGomuCommand(["pkg/a.go:12-40"], "/repo");
+    assert.ok(cmd.includes("'pkg' 1>&2"));
+    assert.ok(!cmd.includes("12-40"));
+  });
+});
+
+describe("parseGomu changed-file scoping", () => {
+  it("filters package-wide results down to changed files and recomputes stats", () => {
+    const report = {
+      statistics: { killed: 4, survived: 2, timedOut: 0, errors: 0, notViable: 0, mutationScore: 66.7 },
+      results: [
+        { mutant: { id: "1", filePath: "/abs/repo/pkg/changed.go", line: 3, type: "t", original: "+", mutated: "-" }, status: "KILLED" },
+        { mutant: { id: "2", filePath: "/abs/repo/pkg/changed.go", line: 9, type: "t", original: "<", mutated: "<=" }, status: "SURVIVED" },
+        { mutant: { id: "3", filePath: "/abs/repo/pkg/other.go", line: 5, type: "t", original: "+", mutated: "-" }, status: "SURVIVED" },
+        { mutant: { id: "4", filePath: "/abs/repo/pkg/other.go", line: 7, type: "t", original: "-", mutated: "+" }, status: "KILLED" },
+      ],
+      duration: 1_000_000_000,
+    };
+    const result = parseGomu(JSON.stringify(report), ["pkg/changed.go"]);
+    assert.equal(result.error, null);
+    assert.equal(result.killed, 1);
+    assert.equal(result.survived, 1);
+    assert.equal(result.totalMutants, 2);
+    assert.equal(result.survivingMutants.length, 1);
+    assert.equal(result.survivingMutants[0].file, "/abs/repo/pkg/changed.go");
+    assert.equal(result.score, 0.5);
+  });
+
+  it("strips line ranges from the changed-file filter", () => {
+    const report = {
+      statistics: { killed: 1, survived: 0, timedOut: 0, errors: 0, notViable: 0, mutationScore: 100 },
+      results: [
+        { mutant: { id: "1", filePath: "/abs/repo/a.go", line: 3, type: "t", original: "+", mutated: "-" }, status: "KILLED" },
+      ],
+      duration: 0,
+    };
+    const result = parseGomu(JSON.stringify(report), ["a.go:1-20"]);
+    assert.equal(result.killed, 1);
+    assert.equal(result.totalMutants, 1);
   });
 });

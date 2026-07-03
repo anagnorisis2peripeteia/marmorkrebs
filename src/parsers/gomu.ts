@@ -31,13 +31,55 @@ interface GomuReport {
   duration?: number;
 }
 
-export function parseGomu(output: string): MutationResult {
-  try {
-    const report: GomuReport = JSON.parse(output);
-    const stats = report.statistics;
-    const mutants: SurvivingMutant[] = [];
+function stripLineRange(file: string): string {
+  return file.replace(/:\d+(?:-\d+)?$/, "");
+}
 
-    for (const r of report.results ?? []) {
+function matchesChangedFile(filePath: string, changedFiles: string[]): boolean {
+  // Report paths are absolute; changed files are repo-relative.
+  return changedFiles.some((cf) => filePath === cf || filePath.endsWith(`/${cf}`));
+}
+
+export function parseGomu(output: string, changedFiles?: string[]): MutationResult {
+  try {
+    // buildGomuCommand emits one report per package dir, separated by ASCII RS
+    // (0x1e). A single plain report (no separator) is the one-chunk case.
+    const chunks = output.split("\u001e").map((c) => c.trim()).filter(Boolean);
+    if (!chunks.length) throw new Error("empty gomu report stream");
+    const reports: GomuReport[] = chunks.map((c) => JSON.parse(c));
+
+    let results: GomuResult[] = [];
+    let durationNsTotal = 0;
+    for (const report of reports) {
+      results.push(...(report.results ?? []));
+      durationNsTotal += report.duration ?? 0;
+    }
+
+    const stats = { killed: 0, survived: 0, timedOut: 0, errors: 0, notViable: 0 };
+    if (changedFiles?.length) {
+      // Package-dir runs mutate the whole package; score only the PR's files.
+      const wanted = changedFiles.map(stripLineRange);
+      results = results.filter((r) => matchesChangedFile(r.mutant.filePath, wanted));
+      for (const r of results) {
+        const status = r.status.toUpperCase();
+        if (status === "KILLED") stats.killed += 1;
+        else if (status === "SURVIVED") stats.survived += 1;
+        else if (status === "TIMED_OUT") stats.timedOut += 1;
+        else if (status === "ERROR") stats.errors += 1;
+        else stats.notViable += 1;
+      }
+    } else {
+      for (const report of reports) {
+        stats.killed += report.statistics?.killed ?? 0;
+        stats.survived += report.statistics?.survived ?? 0;
+        stats.timedOut += report.statistics?.timedOut ?? 0;
+        stats.errors += report.statistics?.errors ?? 0;
+        stats.notViable += report.statistics?.notViable ?? 0;
+      }
+    }
+
+    const mutants: SurvivingMutant[] = [];
+    for (const r of results) {
       const status = r.status.toUpperCase();
       if (status === "SURVIVED" || status === "TIMED_OUT" || status === "ERROR") {
         mutants.push({
@@ -50,14 +92,10 @@ export function parseGomu(output: string): MutationResult {
       }
     }
 
-    const killed = stats.killed ?? 0;
-    const survived = stats.survived ?? 0;
-    const timedOut = stats.timedOut ?? 0;
-    const errors = stats.errors ?? 0;
-    const notViable = stats.notViable ?? 0;
+    const { killed, survived, timedOut, errors, notViable } = stats;
     const total = killed + survived + timedOut + errors;
     const denom = killed + survived + timedOut;
-    const durationNs = report.duration ?? 0;
+    const durationNs = durationNsTotal;
 
     return {
       tool: "gomu",
@@ -89,15 +127,44 @@ export function parseGomu(output: string): MutationResult {
   }
 }
 
+// gomu's `run` accepts at most ONE positional path, and `--output json` writes the
+// report to mutation-report.json in the CWD (stdout is human progress). It also skips
+// a bare file that has no test file of its own, and consults .gomu_history.json to
+// silently skip "unchanged" files EVEN WITH --incremental=false. So: run gomu once
+// per unique PACKAGE DIR of the changed files (Go tests are package-scoped), scrub
+// the history file around every run, collect each report into a temp dir, then emit
+// them on stdout separated by ASCII RS (0x1e); parseGomu merges the reports and
+// filters mutants back down to the changed files. The `&&` chain is fail-closed:
+// gomu (v0.2.1) exits 0 when mutants merely survive and non-zero only on real
+// errors, so any failed run aborts the chain and a partial result can never be
+// scored as a full one.
 export function buildGomuCommand(
   sourceFiles: string[],
   workDir: string,
-  baseBranch = "main",
   timeoutSecs = 30,
   workers = 4,
 ): string {
-  const fileArgs = sourceFiles.length > 0 ? sourceFiles.map((f) => `'${shellEscape(f)}'`).join(" ") : ".";
-  return `cd '${shellEscape(workDir)}' && gomu run --output json --timeout ${timeoutSecs} --workers ${workers} --incremental=false ${fileArgs} 2>&1`;
+  const dirs = [
+    ...new Set(
+      sourceFiles.map((f) => {
+        const file = stripLineRange(f);
+        const slash = file.lastIndexOf("/");
+        return slash === -1 ? "." : file.slice(0, slash);
+      }),
+    ),
+  ];
+  const runs = dirs
+    .map(
+      (d, i) =>
+        `rm -f .gomu_history.json && gomu run --output json --timeout ${timeoutSecs} --workers ${workers} ` +
+        `--incremental=false '${shellEscape(d)}' 1>&2 && mv -f mutation-report.json "$RPT/r${i}.json"`,
+    )
+    .join(" && ");
+  return (
+    `cd '${shellEscape(workDir)}' && RPT="$(mktemp -d)" && rm -f mutation-report.json && ` +
+    `${runs} && rm -f .gomu_history.json && ` +
+    `for r in "$RPT"/*.json; do cat "$r"; printf '\\n\\036\\n'; done && rm -rf "$RPT"`
+  );
 }
 
 function shellEscape(s: string): string {
