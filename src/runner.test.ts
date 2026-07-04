@@ -100,3 +100,42 @@ describe("missing binary is an error, not a pass (integration)", () => {
     }
   });
 });
+
+describe("stryker-cxx exit-2 keeps its report (integration)", () => {
+  it("below-threshold runner exit with a valid report parses instead of erroring", () => {
+    const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-exit2-"));
+    // Stub replaying a CAPTURED REAL report: stryker-cxx 0.1.0 live probe,
+    // 2026-07-04 (2 mutants, all survived, shim exited 2 = below threshold-break).
+    // Per-mutant arrays truncated; every top-level scalar + thresholds/dryRun verbatim.
+    const stub = join(dir, "stub-stryker-cxx");
+    writeFileSync(
+      stub,
+      `#!/bin/bash
+report=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--report" ]; then report="$a"; fi
+  prev="$a"
+done
+cat > "$report" <<'JSON'
+{"schemaVersion":"stryker-cxx.report.v1","tool":"stryker-cxx","toolVersion":"0.1.0","repo":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe","base":null,"startedAt":"2026-07-04T14:17:06.071332Z","completedAt":"2026-07-04T14:17:06.133829Z","threshold":1.0,"thresholds":{"high":1.0,"low":1.0,"break":1.0,"status":"failed"},"timeoutSeconds":6,"totalMutants":2,"killed":0,"survived":2,"buildErrors":0,"checkErrors":0,"noCoverage":0,"timeouts":0,"ignored":0,"score":0.0,"dryRun":{"status":"PASSED","artifacts":{"buildLog":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe/agent_space/stryker-cxx/dry_run_build.log","checkLog":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe/agent_space/stryker-cxx/dry_run_check.log","testLog":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe/agent_space/stryker-cxx/dry_run_test.log"},"build":{"exitCode":0,"durationMs":4,"log":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe/agent_space/stryker-cxx/dry_run_build.log","provider":"builtin"},"test":{"exitCode":0,"durationMs":3,"log":"/tmp/claude-501/-Users-cameronbeeley/d8722002-1b5d-4612-aca0-694829551895/scratchpad/cxx-probe/agent_space/stryker-cxx/dry_run_test.log","provider":"builtin"}},"scorePercent":0.0,"build_error":0,"check_error":0,"no_coverage":0,"total":2,"ignored_count":0}
+JSON
+exit 2
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const r = runMutationAnalysis(dir, ["src/a.cpp"], {
+        tool: "stryker-cxx",
+        buildCommand: "true",
+        testCommand: "true",
+        strykerCxxBinary: stub,
+      } as MutationConfig);
+      assert.equal(r.error, null, "exit 2 with a valid report must parse, not mask");
+      assert.equal(r.totalMutants, 2);
+      assert.equal(r.thresholds?.status, "failed");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
