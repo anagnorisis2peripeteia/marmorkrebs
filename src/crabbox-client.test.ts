@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+// The fake crabbox is a POSIX shell script: Node cannot spawnSync a shebang file on
+// Windows (and refuses .cmd/.bat without shell since the EINVAL hardening), so these
+// suites skip there EXPLICITLY. The client code under test is platform-neutral
+// spawnSync plumbing; only the test double is POSIX-bound.
+const POSIX_ONLY = { skip: process.platform === "win32" ? "fake crabbox needs POSIX exec" : false };
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -57,7 +63,7 @@ function callLog(): string[] {
   return readFileSync(calls, "utf8").split("\n").filter(Boolean);
 }
 
-describe("crabboxProvision", () => {
+describe("crabboxProvision", POSIX_ONLY, () => {
   it("parses the lease id", () => {
     process.env.FAKE_CRABBOX_MODE = "provision-ok";
     const lease = crabboxProvision({ provider: "tart" });
@@ -75,7 +81,7 @@ describe("crabboxProvision", () => {
   });
 });
 
-describe("crabboxExec", () => {
+describe("crabboxExec", POSIX_ONLY, () => {
   it("returns stdout/stderr/exitCode from the remote command", () => {
     process.env.FAKE_CRABBOX_MODE = "exec";
     const r = crabboxExec("fake-lease-42", "echo out; echo err >&2; exit 3");
@@ -85,14 +91,14 @@ describe("crabboxExec", () => {
   });
 });
 
-describe("crabboxSync", () => {
+describe("crabboxSync", POSIX_ONLY, () => {
   it("throws with exit code on sync failure", () => {
     process.env.FAKE_CRABBOX_MODE = "sync-fail";
     assert.throws(() => crabboxSync("fake-lease-42", "/a", "/b"), /exit 12.*connection refused/s);
   });
 });
 
-describe("stop/cleanup are best-effort", () => {
+describe("stop/cleanup are best-effort", POSIX_ONLY, () => {
   it("record their subcommands", () => {
     process.env.FAKE_CRABBOX_MODE = "exec";
     crabboxStop("fake-lease-42");

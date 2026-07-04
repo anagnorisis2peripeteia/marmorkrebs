@@ -140,7 +140,12 @@ exit 2
   });
 });
 
-describe("crabbox execution paths (fake crabbox binary)", () => {
+describe(
+  "crabbox execution paths (fake crabbox binary)",
+  { skip: process.platform === "win32" ? "fake crabbox needs POSIX exec" : false },
+  () => {
+  // Field-for-field subset of a real gomu 0.2.1 mutation-report.json (captured in the
+  // 2026-07-03 live probe on fixtures/gomu; a.go arithmetic mutant, killed).
   const CANNED_GOMU_REPORT = JSON.stringify({
     statistics: { killed: 1, survived: 0, timedOut: 0, errors: 0, notViable: 0, mutationScore: 100 },
     results: [
