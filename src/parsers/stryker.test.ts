@@ -92,3 +92,17 @@ describe("parseStryker", () => {
     assert.match(command, /cat reports\/mutation\/mutation\.json/);
   });
 });
+
+describe("buildStrykerCommand scoping and mutator policy", () => {
+  it("passes ranged mutate entries through untouched (StrykerJS native)", () => {
+    const cmd = buildStrykerCommand(["src/a.ts:12-40"], "/repo", "npm test");
+    assert.ok(cmd.includes('"mutate":["src/a.ts:12-40"]'));
+  });
+
+  it("adds mutator.excludedMutations only when provided", () => {
+    const withEx = buildStrykerCommand(["src/a.ts"], "/repo", "npm test", ["StringLiteral"]);
+    assert.ok(withEx.includes('"mutator":{"excludedMutations":["StringLiteral"]}'));
+    const without = buildStrykerCommand(["src/a.ts"], "/repo", "npm test");
+    assert.ok(!without.includes("excludedMutations"));
+  });
+});

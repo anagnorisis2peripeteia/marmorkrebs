@@ -61,6 +61,8 @@ export function parseCliArgs(argv: string[]): {
   timeout?: number;
   threshold?: number;
   allowEmpty?: boolean;
+  scopeLines?: boolean;
+  excludeMutations?: string[];
   thresholdHigh?: number;
   thresholdLow?: number;
   thresholdBreak?: number;
@@ -127,6 +129,7 @@ export function parseCliArgs(argv: string[]): {
 } {
   const BOOLEAN_FLAGS = new Set([
     "allow-empty",
+    "scope-lines",
     "skip-sync",
     "include-metal",
     "skip-initial-test",
@@ -305,6 +308,8 @@ export function parseCliArgs(argv: string[]): {
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
   if ("allow-empty" in args) result.allowEmpty = true;
+  if ("scope-lines" in args) result.scopeLines = true;
+  if (args["exclude-mutations"]) result.excludeMutations = splitCommaList(args["exclude-mutations"]);
   if (args["remote-dir"]) result.remoteDir = args["remote-dir"];
   if (args.provider) {
     result.crabbox = { provider: args.provider };

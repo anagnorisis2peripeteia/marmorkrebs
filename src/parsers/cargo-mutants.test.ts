@@ -64,3 +64,18 @@ describe("buildCargoMutantsCommand", () => {
     assert.ok(cmd.includes("exit $code"), "must propagate the tool exit code");
   });
 });
+
+describe("parseCargoMutants line-range scoping", () => {
+  it("recomputes counts from outcomes when entries carry ranges", () => {
+    const r = parseCargoMutants(JSON.stringify(REAL_REPORT), ["src/untested.rs:1-2"]);
+    assert.equal(r.totalMutants, 2, "two untested.rs mutants on line 2");
+    assert.equal(r.survived, 2);
+    assert.equal(r.killed, 0);
+    assert.ok(r.survivingMutants.every((m) => m.file === "src/untested.rs"));
+  });
+
+  it("without ranges keeps the report's own counts", () => {
+    const r = parseCargoMutants(JSON.stringify(REAL_REPORT), ["src/untested.rs", "src/lib.rs", "src/slow.rs"]);
+    assert.equal(r.totalMutants, 9);
+  });
+});

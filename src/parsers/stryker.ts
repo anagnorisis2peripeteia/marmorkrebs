@@ -79,6 +79,7 @@ export function buildStrykerCommand(
   sourceFiles: string[],
   workDir: string,
   testCommand?: string,
+  excludeMutations?: string[],
 ): string {
   const wd = shellEscape(workDir);
   const mutateGlobs = sourceFiles.map((f) => `'${shellEscape(f)}'`).join(",");
@@ -97,6 +98,8 @@ export function buildStrykerCommand(
     // No usable repo Stryker config: drive it with a throwaway one — the `command` test
     // runner (exit code = pass/fail) on the focused test command; babel mutator (skip the
     // tsconfig preprocessor via a nonexistent tsconfigFile); JSON report.
+    // `mutate` entries may carry :start-end line ranges — StrykerJS consumes them
+    // natively, so line-scoped runs need no marmorkrebs-side filtering here.
     const cfg = JSON.stringify({
       mutate: sourceFiles,
       testRunner: "command",
@@ -104,6 +107,7 @@ export function buildStrykerCommand(
       reporters: ["json"],
       tsconfigFile: "marmorkrebs.notsconfig.json",
       tempDirName: ".stryker-tmp",
+      ...(excludeMutations?.length ? { mutator: { excludedMutations: excludeMutations } } : {}),
     }).replace(/'/g, `'\\''`);
     return (
       `${ensure} && cd '${wd}' && { ${exclude}; } && ` +

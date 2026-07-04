@@ -244,7 +244,7 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
     case "go-mutesting":
       return buildGoMutestingCommand(sourceFiles, workDir);
     case "stryker":
-      return buildStrykerCommand(sourceFiles, workDir, config.testCommand);
+      return buildStrykerCommand(sourceFiles, workDir, config.testCommand, config.excludeMutations);
     case "stryker-net":
       return buildStrykerNetCommand(sourceFiles, workDir);
     case "cargo-mutants":
@@ -281,7 +281,8 @@ function parseOutput(
     case "stryker-net":
       return parseStrykerNet(stdout);
     case "cargo-mutants":
-      return parseCargoMutants(stdout);
+      // --file scopes files natively; line ranges are honored parser-side.
+      return parseCargoMutants(stdout, sourceFiles);
     case "mutmut":
       // mutmut mutates everything under source_paths; scope scoring to the PR's files.
       return parseMutmut(stdout, sourceFiles);

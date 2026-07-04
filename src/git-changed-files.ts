@@ -27,3 +27,57 @@ export function getChangedFilesFromGit(dir: string, base: string): string[] {
   const all = new Set([...fromBranch, ...fromWorkingTree, ...untracked]);
   return [...all].filter((file) => existsSync(join(dir, file))).sort();
 }
+
+/**
+ * Like getChangedFilesFromGit, but each entry carries the changed line ranges as
+ * "file:12-40" suffixes (one entry per hunk), derived from -U0 diffs of the branch
+ * vs merge-base plus the working tree. Untracked files get NO suffix (every line is
+ * new). Lanes that understand ranges scope mutation to PR-touched lines; lanes that
+ * don't degrade to whole-file scope by stripping the suffix.
+ */
+export function getChangedLineRangesFromGit(dir: string, base: string): string[] {
+  const ranges = new Map<string, Array<[number, number]>>();
+
+  const collect = (diffArgs: string[]) => {
+    const out = git(dir, ["diff", "-U0", ...diffArgs]);
+    let file: string | null = null;
+    for (const line of out.split("\n")) {
+      const fileMatch = line.match(/^\+\+\+ b\/(.+)$/);
+      if (fileMatch) {
+        file = fileMatch[1];
+        continue;
+      }
+      const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+      if (hunk && file) {
+        const start = parseInt(hunk[1], 10);
+        const count = hunk[2] === undefined ? 1 : parseInt(hunk[2], 10);
+        if (count === 0) continue; // pure deletion hunk — nothing to mutate here
+        const list = ranges.get(file) ?? [];
+        list.push([start, start + count - 1]);
+        ranges.set(file, list);
+      }
+    }
+  };
+  collect([`${base}...HEAD`]);
+  collect(["HEAD"]);
+
+  const untracked = lines(git(dir, ["ls-files", "--others", "--exclude-standard"]));
+
+  const entries: string[] = [];
+  for (const [file, list] of ranges) {
+    if (!existsSync(join(dir, file))) continue;
+    // merge overlapping/adjacent ranges so one file yields few entries
+    list.sort((a, b) => a[0] - b[0]);
+    const merged: Array<[number, number]> = [];
+    for (const [s, e] of list) {
+      const last = merged[merged.length - 1];
+      if (last && s <= last[1] + 1) last[1] = Math.max(last[1], e);
+      else merged.push([s, e]);
+    }
+    for (const [s, e] of merged) entries.push(`${file}:${s}-${e}`);
+  }
+  for (const file of untracked) {
+    if (existsSync(join(dir, file))) entries.push(file);
+  }
+  return entries.sort();
+}

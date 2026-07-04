@@ -242,3 +242,29 @@ describe("parseGomu changed-file scoping", () => {
     assert.equal(result.totalMutants, 1);
   });
 });
+
+describe("parseGomu line-range scoping", () => {
+  const report = {
+    statistics: { killed: 2, survived: 2, timedOut: 0, errors: 0, notViable: 0, mutationScore: 50 },
+    results: [
+      { mutant: { id: "1", filePath: "/r/a.go", line: 3, type: "t", original: "+", mutated: "-" }, status: "SURVIVED" },
+      { mutant: { id: "2", filePath: "/r/a.go", line: 9, type: "t", original: "<", mutated: "<=" }, status: "SURVIVED" },
+      { mutant: { id: "3", filePath: "/r/a.go", line: 3, type: "t", original: "+", mutated: "*" }, status: "KILLED" },
+      { mutant: { id: "4", filePath: "/r/a.go", line: 9, type: "t", original: "<", mutated: ">" }, status: "KILLED" },
+    ],
+    duration: 0,
+  };
+
+  it("scores only mutants inside the entry's line range", () => {
+    const r = parseGomu(JSON.stringify(report), ["a.go:1-5"]);
+    assert.equal(r.totalMutants, 2, "only line-3 mutants in scope");
+    assert.equal(r.survived, 1);
+    assert.equal(r.survivingMutants.length, 1);
+    assert.equal(r.survivingMutants[0].line, 3);
+  });
+
+  it("whole-file entry keeps every line in scope", () => {
+    const r = parseGomu(JSON.stringify(report), ["a.go"]);
+    assert.equal(r.totalMutants, 4);
+  });
+});
