@@ -105,10 +105,13 @@ export function buildStrykerNetCommand(sourceFiles: string[], workDir: string): 
     .map((f) => `--mutate '${shellEscape(f.startsWith("**/") ? f : `**/${f}`)}'`)
     .join(" ");
   const escWork = shellEscape(workDir);
+  // Preserve the runner's exit code through the cat (PR #1's lesson) and clean the
+  // output dirs after the report is on stdout (validator artifact-hygiene catch).
   return (
     `cd '${escWork}' && ` +
-    `dotnet stryker ${mutateArgs} --reporter json --output .marmorkrebs-stryker >/dev/null 2>&1; ` +
-    `cat "$(find .marmorkrebs-stryker StrykerOutput -name mutation-report.json -path '*reports*' 2>/dev/null | sort | tail -1)" 2>/dev/null`
+    `dotnet stryker ${mutateArgs} --reporter json --output .marmorkrebs-stryker 1>&2; code=$?; ` +
+    `cat "$(find .marmorkrebs-stryker StrykerOutput -name mutation-report.json -path '*reports*' 2>/dev/null | sort | tail -1)" 2>/dev/null; ` +
+    `rm -rf .marmorkrebs-stryker StrykerOutput; exit $code`
   );
 }
 
