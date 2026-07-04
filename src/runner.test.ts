@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reconcileResult, runMutationAnalysis } from "./runner.js";
@@ -136,6 +136,110 @@ exit 2
       assert.equal(r.thresholds?.status, "failed");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("crabbox execution paths (fake crabbox binary)", () => {
+  const CANNED_GOMU_REPORT = JSON.stringify({
+    statistics: { killed: 1, survived: 0, timedOut: 0, errors: 0, notViable: 0, mutationScore: 100 },
+    results: [
+      { mutant: { id: "x", filePath: "a.go", line: 3, type: "t", original: "+", mutated: "-" }, status: "KILLED" },
+    ],
+    duration: 1_000_000,
+  });
+
+  let dir: string;
+  let calls: string;
+
+  function makeFake(mode: string) {
+    dir = mkdtempSync(join(tmpdir(), "marmorkrebs-fakecrab-runner-"));
+    calls = join(dir, "calls.log");
+    writeFileSync(calls, "");
+    const bin = join(dir, "crabbox");
+    writeFileSync(
+      bin,
+      `#!/bin/bash
+echo "$1" >> "${calls}"
+case "${mode}:$1" in
+  *:run)   echo "lease=fake-lease-9"; exit 0 ;;
+  ok:ssh)  printf '%s' '${CANNED_GOMU_REPORT}'; printf '\\n\\x1e\\n'; exit 0 ;;
+  dead:ssh) exit 127 ;;
+  syncfail:cache) echo "rsync down" >&2; exit 12 ;;
+  *:cache) exit 0 ;;
+  *) exit 0 ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+    process.env.CRABBOX_BIN = bin;
+  }
+
+  function cleanupFake() {
+    delete process.env.CRABBOX_BIN;
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  function callLog(): string[] {
+    return readFileSync(calls, "utf8").split("\n").filter(Boolean);
+  }
+
+  it("runInCrabbox full lifecycle: parses report; stop+cleanup always run", () => {
+    makeFake("ok");
+    try {
+      const r = runMutationAnalysis("/repo", ["a.go"], {
+        tool: "gomu",
+        crabbox: { provider: "tart" },
+      } as MutationConfig);
+      assert.equal(r.error, null);
+      assert.equal(r.totalMutants, 1);
+      assert.deepEqual(callLog(), ["run", "cache", "ssh", "stop", "cleanup"]);
+    } finally {
+      cleanupFake();
+    }
+  });
+
+  it("runInCrabbox exec failure fails closed AND still stops/cleans the lease", () => {
+    makeFake("dead");
+    try {
+      const r = runMutationAnalysis("/repo", ["a.go"], {
+        tool: "gomu",
+        crabbox: { provider: "tart" },
+      } as MutationConfig);
+      assert.notEqual(r.error, null, "dead remote must not pass");
+      const log = callLog();
+      assert.ok(log.includes("stop") && log.includes("cleanup"), "lease must not leak");
+    } finally {
+      cleanupFake();
+    }
+  });
+
+  it("runOnExistingLease with skipSync never syncs", () => {
+    makeFake("ok");
+    try {
+      const r = runMutationAnalysis("/repo", ["a.go"], {
+        tool: "gomu",
+        leaseId: "fake-lease-9",
+        skipSync: true,
+      } as MutationConfig);
+      assert.equal(r.error, null);
+      assert.ok(!callLog().includes("cache"));
+    } finally {
+      cleanupFake();
+    }
+  });
+
+  it("runOnExistingLease sync failure is an error and skips exec", () => {
+    makeFake("syncfail");
+    try {
+      const r = runMutationAnalysis("/repo", ["a.go"], {
+        tool: "gomu",
+        leaseId: "fake-lease-9",
+      } as MutationConfig);
+      assert.match(r.error ?? "", /crabbox sync failed/);
+      assert.ok(!callLog().includes("ssh"), "must not exec after failed sync");
+    } finally {
+      cleanupFake();
     }
   });
 });
