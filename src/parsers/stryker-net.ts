@@ -63,6 +63,17 @@ export function parseStrykerNet(output: string): MutationResult {
     };
   }
 
+  const scored = killed + survived + timeout + noCoverage;
+  const total = killed + survived + timeout + noCoverage + ignored;
+  if (total > 0 && scored === 0) {
+    // Every mutant Ignored = the mutate filter matched nothing; scoring this as a
+    // vacuous 1.0 is exactly how a mis-rooted glob passes a gate silently.
+    return {
+      ...EMPTY_RESULT,
+      tool: "stryker-net",
+      error: `all ${total} mutants were Ignored — --mutate patterns likely matched nothing (glob resolution root mismatch)`,
+    };
+  }
   const denominator = killed + survived + noCoverage;
   return {
     tool: "stryker-net",
@@ -83,7 +94,16 @@ export function buildStrykerNetCommand(sourceFiles: string[], workDir: string): 
   // Stryker.NET takes one or more `--mutate` glob patterns; repo-relative file paths work
   // as degenerate globs. The json reporter writes the report to a file under the output
   // folder, so run quietly and cat that report to stdout for parseStrykerNet (clean JSON).
-  const mutateArgs = sourceFiles.map((f) => `--mutate '${shellEscape(f)}'`).join(" ");
+  // Stryker.NET resolves mutate globs against the project under test, NOT the
+  // solution/repo root our changed-file entries are relative to — a bare
+  // 'Lib/Calc.cs' matched nothing and every mutant came back Ignored (validator
+  // CI catch, 2026-07-04). '**/'-anchor each pattern so it matches the full path
+  // suffix regardless of the resolution root; line-range suffixes are stripped
+  // (Stryker.NET has no range support).
+  const mutateArgs = sourceFiles
+    .map((f) => f.replace(/:\d+(?:-\d+)?$/, ""))
+    .map((f) => `--mutate '${shellEscape(f.startsWith("**/") ? f : `**/${f}`)}'`)
+    .join(" ");
   const escWork = shellEscape(workDir);
   return (
     `cd '${escWork}' && ` +
