@@ -106,3 +106,20 @@ describe("buildStrykerCommand scoping and mutator policy", () => {
     assert.ok(!without.includes("excludedMutations"));
   });
 });
+
+describe("stale-report scrub ordering (fail-open regression)", () => {
+  it("cd + scrub precede the ensure step in BOTH branches", () => {
+    // The trailing `cat` runs on every exit path; if the prior report is not
+    // scrubbed before anything can fail, a failed run emits stale-report +
+    // non-zero exit and reconcileResult trusts it as a threshold verdict.
+    for (const cmd of [
+      buildStrykerCommand(["src/a.ts"], "/repo", "npm test"),
+      buildStrykerCommand(["src/a.ts"], "/repo"),
+    ]) {
+      assert.ok(
+        cmd.startsWith("cd '/repo' && rm -f reports/mutation/mutation.json && "),
+        `scrub must be first: ${cmd.slice(0, 80)}`,
+      );
+    }
+  });
+});

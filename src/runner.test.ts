@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reconcileResult, runMutationAnalysis } from "./runner.js";
@@ -246,5 +246,53 @@ esac
     } finally {
       cleanupFake();
     }
+  });
+});
+
+describe(
+  "stryker stale-report guard",
+  { skip: process.platform === "win32" ? "PATH-hiding probe is POSIX-shaped" : false },
+  () => {
+    it("a failed run must not resurrect a PRE-EXISTING report as a pass", () => {
+      const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-stale-"));
+      const reportDir = join(dir, "reports", "mutation");
+      mkdirSync(reportDir, { recursive: true });
+      const staleReport = JSON.stringify({
+        files: {
+          "lib/a.js": {
+            mutants: [
+              { status: "Killed", mutatorName: "t", location: { start: { line: 1 } } },
+              { status: "Survived", mutatorName: "t", location: { start: { line: 2 } } },
+            ],
+          },
+        },
+      });
+      writeFileSync(join(reportDir, "mutation.json"), staleReport);
+      const past = new Date(Date.now() - 3_600_000);
+      utimesSync(join(reportDir, "mutation.json"), past, past);
+      const origPath = process.env.PATH;
+      try {
+        process.env.PATH = "/usr/bin:/bin"; // stryker AND npm hidden -> the run must fail
+        const r = runMutationAnalysis(dir, ["lib/a.js"], {
+          tool: "stryker",
+          testCommand: "node test.js",
+        } as MutationConfig);
+        assert.notEqual(r.error, null, "stale report must never score a failed run");
+        assert.equal(r.totalMutants, 0);
+      } finally {
+        process.env.PATH = origPath;
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  },
+);
+
+describe("fixtures are test data, not mutation targets", () => {
+  it("a fixtures-only diff yields no mutatable sources", () => {
+    const r = runMutationAnalysis("/repo", ["fixtures/stryker/lib/tested.js", "fixtures/gomu/a.go"], {
+      tool: "stryker",
+    } as MutationConfig);
+    assert.equal(r.totalMutants, 0);
+    assert.equal(r.error, null); // static early-return, same as a test-only diff
   });
 });

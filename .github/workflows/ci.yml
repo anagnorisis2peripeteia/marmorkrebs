@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches: [master]
   pull_request:
 
 jobs:
@@ -57,3 +58,21 @@ jobs:
           for tool in gomu go-mutesting cargo-mutants mutmut; do
             node scripts/validate-provider.mjs "$tool" || exit 1
           done
+
+  providers-windows:
+    name: provider validation (stryker-net, windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install dotnet-stryker
+        run: dotnet tool install -g dotnet-stryker
+      - name: Install dependencies and build
+        run: npm install && npm run build
+      - name: Validate stryker-net lane
+        run: node scripts/validate-provider.mjs stryker-net

@@ -208,6 +208,9 @@ function runLocally(
 
   try {
     // Stryker's "json" reporter writes a FILE, not stdout — prefer it when present.
+    // Freshness is guaranteed by the COMMAND: buildStrykerCommand cd+scrubs the prior
+    // report before anything can fail, so a file here was written by THIS run (the
+    // stale-report fail-open is regression-locked end-to-end in runner.test.ts).
     let stdout = result.stdout ?? "";
     if (config.tool === "stryker") {
       try {
@@ -329,6 +332,8 @@ function sourceExtensions(tool: MutationTool): string[] {
 
 function isTestFile(file: string): boolean {
   return (
+    file.includes("/fixtures/") ||
+    file.startsWith("fixtures/") ||
     file.includes("_test.") ||
     file.includes(".test.") ||
     file.includes(".spec.") ||

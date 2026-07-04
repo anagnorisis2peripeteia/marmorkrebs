@@ -89,6 +89,9 @@ export function buildStrykerCommand(
   const ensure =
     `command -v stryker >/dev/null 2>&1 || npm install -g @stryker-mutator/core typescript 1>&2`;
   // Keep Stryker's artifacts out of git status so they don't trip later clean-tree gates.
+  // The PRIOR report is scrubbed before each run: a failed run must not let anything
+  // downstream read a stale reports/mutation/mutation.json as a fresh pass (fail-open
+  // caught live by the validator's hidden-binary probe, 2026-07-04).
   const exclude =
     `E="$(git rev-parse --git-path info/exclude 2>/dev/null)"; ` +
     `[ -n "$E" ] && { grep -qxF 'reports/' "$E" 2>/dev/null || ` +
@@ -109,8 +112,12 @@ export function buildStrykerCommand(
       tempDirName: ".stryker-tmp",
       ...(excludeMutations?.length ? { mutator: { excludedMutations: excludeMutations } } : {}),
     }).replace(/'/g, `'\\''`);
+    // cd + scrub the PRIOR report FIRST: the trailing `cat` runs on every exit path,
+    // so a stale report from an earlier run must be gone BEFORE anything can fail —
+    // otherwise a failed run emits stale-report+nonzero-exit, which reconcileResult
+    // trusts as a tool-threshold verdict (fail-open caught by the validator probe).
     return (
-      `${ensure} && cd '${wd}' && { ${exclude}; } && ` +
+      `cd '${wd}' && rm -f reports/mutation/mutation.json && ${ensure} && { ${exclude}; } && ` +
       `printf '%s' '${cfg}' > .marmorkrebs-stryker.json && ` +
       `stryker run .marmorkrebs-stryker.json 1>&2; ` +
       `code=$?; cat reports/mutation/mutation.json 2>/dev/null; ` +
@@ -118,7 +125,7 @@ export function buildStrykerCommand(
     );
   }
   return (
-    `${ensure} && cd '${wd}' && { ${exclude}; } && ` +
+    `cd '${wd}' && rm -f reports/mutation/mutation.json && ${ensure} && { ${exclude}; } && ` +
     `stryker run --mutate ${mutateGlobs} --reporters json 1>&2; ` +
     `code=$?; cat reports/mutation/mutation.json 2>/dev/null; exit $code`
   );

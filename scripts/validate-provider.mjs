@@ -75,6 +75,29 @@ const SPECS = {
     noSurvivorsIn: ["calclib/neighbor.py"],
     forbiddenArtifacts: ["mutants"],
   },
+  stryker: {
+    binary: "stryker", // global @stryker-mutator/core (the lane auto-installs when missing, but the validator requires it present to run)
+    fixture: "fixtures/stryker",
+    changedFiles: ["lib/tested.js", "lib/untested.js"],
+    config: { testCommand: "node test.js" },
+    minMutants: 2,
+    survivorsIn: ["lib/untested.js"],
+    noSurvivorsIn: ["lib/neighbor.js"],
+    // The stryker lane deliberately KEEPS reports/ + .stryker-tmp (git-excluded via
+    // info/exclude; runLocally reads reports/mutation/mutation.json as a fallback).
+    // Its hygiene contract is git-invisibility, not absence — only the throwaway
+    // config must be cleaned up.
+    forbiddenArtifacts: [".marmorkrebs-stryker.json"],
+  },
+  "stryker-net": {
+    binary: "dotnet-stryker", // dotnet tool install -g dotnet-stryker (Windows CI job; local run needs the dotnet SDK)
+    fixture: "fixtures/stryker-net",
+    changedFiles: ["Lib/Calc.cs"],
+    minMutants: 2,
+    survivorsIn: ["Calc.cs"], // Sub() is untested
+    noSurvivorsIn: [],
+    forbiddenArtifacts: [".marmorkrebs-stryker", "StrykerOutput"],
+  },
 };
 
 function binaryPath(name) {
@@ -98,7 +121,7 @@ function validate(tool, spec) {
 
   try {
     // 1) Positive run against the real tool.
-    const result = runMutationAnalysis(target, spec.changedFiles, { tool });
+    const result = runMutationAnalysis(target, spec.changedFiles, { tool, ...(spec.config ?? {}) });
     if (result.error) return fail(tool, `real run errored: ${result.error}`, result);
     if (result.totalMutants < spec.minMutants) {
       return fail(tool, `expected >=${spec.minMutants} mutants, got ${result.totalMutants}`, result);
@@ -126,7 +149,7 @@ function validate(tool, spec) {
     let hidden;
     try {
       process.env.PATH = "/usr/bin:/bin";
-      hidden = runMutationAnalysis(target, spec.changedFiles, { tool });
+      hidden = runMutationAnalysis(target, spec.changedFiles, { tool, ...(spec.config ?? {}) });
     } finally {
       process.env.PATH = origPath;
     }
