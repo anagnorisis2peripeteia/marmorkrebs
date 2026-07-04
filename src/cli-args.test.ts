@@ -42,3 +42,11 @@ describe("parseCliArgs", () => {
     );
   });
 });
+
+describe("scope-lines and exclude-mutations flags", () => {
+  it("parses both", () => {
+    const o = parseCliArgs(argv("--tool", "stryker", "--scope-lines", "--exclude-mutations", "StringLiteral, ObjectLiteral"));
+    assert.equal(o.scopeLines, true);
+    assert.deepEqual(o.excludeMutations, ["StringLiteral", "ObjectLiteral"]);
+  });
+});

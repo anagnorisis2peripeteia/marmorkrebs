@@ -1,4 +1,5 @@
 import { type MutationResult, type SurvivingMutant } from "../types.js";
+import { matchesScope, parseScopedTargets } from "./scope.js";
 
 interface GomuResult {
   mutant: {
@@ -35,11 +36,6 @@ function stripLineRange(file: string): string {
   return file.replace(/:\d+(?:-\d+)?$/, "");
 }
 
-function matchesChangedFile(filePath: string, changedFiles: string[]): boolean {
-  // Report paths are absolute; changed files are repo-relative.
-  return changedFiles.some((cf) => filePath === cf || filePath.endsWith(`/${cf}`));
-}
-
 export function parseGomu(output: string, changedFiles?: string[]): MutationResult {
   try {
     // buildGomuCommand emits one report per package dir, separated by ASCII RS
@@ -57,9 +53,10 @@ export function parseGomu(output: string, changedFiles?: string[]): MutationResu
 
     const stats = { killed: 0, survived: 0, timedOut: 0, errors: 0, notViable: 0 };
     if (changedFiles?.length) {
-      // Package-dir runs mutate the whole package; score only the PR's files.
-      const wanted = changedFiles.map(stripLineRange);
-      results = results.filter((r) => matchesChangedFile(r.mutant.filePath, wanted));
+      // Package-dir runs mutate the whole package; score only the PR's files —
+      // and only the PR's LINES when entries carry :start-end ranges.
+      const targets = parseScopedTargets(changedFiles);
+      results = results.filter((r) => matchesScope(r.mutant.filePath, r.mutant.line ?? 0, targets));
       for (const r of results) {
         const status = r.status.toUpperCase();
         if (status === "KILLED") stats.killed += 1;

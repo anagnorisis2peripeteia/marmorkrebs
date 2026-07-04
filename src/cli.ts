@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { getChangedFilesFromGit } from "./git-changed-files.js";
+import { getChangedFilesFromGit, getChangedLineRangesFromGit } from "./git-changed-files.js";
 import { runMutationAnalysis } from "./runner.js";
 import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.js";
 import { parseCliArgs, TOOLS, UsageError } from "./cli-args.js";
@@ -202,7 +202,9 @@ function main(): void {
   const diffBase = opts.base ?? opts.since;
   if (!changedFiles && diffBase) {
     try {
-      changedFiles = getChangedFilesFromGit(repoDir, diffBase);
+      changedFiles = opts.scopeLines
+        ? getChangedLineRangesFromGit(repoDir, diffBase)
+        : getChangedFilesFromGit(repoDir, diffBase);
       console.error(
         `[marmorkrebs] ${changedFiles.length} changed files from local diff vs ${diffBase}`,
       );
@@ -251,6 +253,7 @@ function main(): void {
     timeoutMs: opts.timeout,
     threshold: opts.threshold,
     allowEmpty: opts.allowEmpty,
+    excludeMutations: opts.excludeMutations,
     thresholdHigh: opts.thresholdHigh,
     thresholdLow: opts.thresholdLow,
     thresholdBreak: opts.thresholdBreak,

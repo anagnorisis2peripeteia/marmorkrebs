@@ -64,6 +64,8 @@ export interface MutationConfig {
   timeoutMs?: number;
   /** Allow a zero-mutant result to pass (default: fail closed — see reconcileResult). */
   allowEmpty?: boolean;
+  /** Mutator names excluded from scoring (stryker lane; e.g. StringLiteral). */
+  excludeMutations?: string[];
   timeoutFactor?: number;
   timeoutConstantMs?: number;
   skipInitialTest?: boolean;
