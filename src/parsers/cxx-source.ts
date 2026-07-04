@@ -161,8 +161,10 @@ export function buildCxxSourceCommand(
     parts.push("--mode", `'${shellEscape(config.mode)}'`);
   }
   // The engine's own progress goes to stdout; redirect it to stderr and emit
-  // only the JSON report (written to a temp file) on stdout.
-  return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; cat "$report"`;
+  // only the JSON report (written to a temp file) on stdout. Capture the runner's
+  // exit code BEFORE cat so it propagates (exit 2 = below threshold-break with a
+  // valid report — reconcileResult trusts a parsed report on non-zero exit).
+  return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; code=$?; cat "$report"; rm -f "$report"; exit $code`;
 }
 
 function buildMullWithFallbackCxxSourceCommand(
@@ -185,7 +187,10 @@ function buildMullWithFallbackCxxSourceCommand(
     fallbackBinary,
   );
 
-  return `report="$(mktemp)" && if command -v '${shellEscape(mullBinary)}' >/dev/null 2>&1; then ${preferred}; else ${fallback}; fi && cat "$report"`;
+  // `;` not `&&` before cat: a below-threshold run exits 2 WITH a valid report —
+  // the old `&& cat` chain dropped it and surfaced as "Failed to parse stryker-cxx
+  // output" (bit every below-threshold pytorch gate run).
+  return `report="$(mktemp)" && if command -v '${shellEscape(mullBinary)}' >/dev/null 2>&1; then ${preferred}; else ${fallback}; fi; code=$?; cat "$report"; rm -f "$report"; exit $code`;
 }
 
 function buildExternalCxxSourceCommand(
@@ -194,12 +199,13 @@ function buildExternalCxxSourceCommand(
   config: MutationConfig,
   binary: string,
 ): string {
+  // Same exit-code-preserving shape as above — never `&& cat` (masks exit 2).
   return `report="$(mktemp)" && ${buildExternalCxxSourceInvocation(
     sourceFiles,
     workDir,
     config,
     binary,
-  )} && cat "$report"`;
+  )}; code=$?; cat "$report"; rm -f "$report"; exit $code`;
 }
 
 function buildExternalCxxSourceInvocation(

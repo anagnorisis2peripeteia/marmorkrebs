@@ -681,3 +681,19 @@ describe("parseCxxSource", () => {
     });
   });
 });
+
+describe("report chains preserve the runner exit code", () => {
+  const cfg = { tool: "stryker-cxx", buildCommand: "make", testCommand: "ctest" } as any;
+
+  it("external stryker-cxx: never `&& cat` (exit 2 must not mask the report)", () => {
+    const cmd = buildCxxSourceCommand(["src/a.cpp"], "/repo", cfg);
+    assert.ok(!cmd.includes('&& cat "$report"'), "&& cat drops the report on exit 2");
+    assert.ok(cmd.includes('; code=$?; cat "$report"; rm -f "$report"; exit $code'));
+  });
+
+  it("mull-with-fallback: same exit-preserving shape", () => {
+    const cmd = buildCxxSourceCommand(["src/a.cpp"], "/repo", { ...cfg, tool: "mull" });
+    assert.ok(!cmd.includes('&& cat "$report"'));
+    assert.ok(cmd.includes('; code=$?; cat "$report"; rm -f "$report"; exit $code'));
+  });
+});

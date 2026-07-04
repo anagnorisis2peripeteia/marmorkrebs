@@ -100,3 +100,41 @@ describe("missing binary is an error, not a pass (integration)", () => {
     }
   });
 });
+
+describe("stryker-cxx exit-2 keeps its report (integration)", () => {
+  it("below-threshold runner exit with a valid report parses instead of erroring", () => {
+    const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-exit2-"));
+    // Stub honoring the stryker-cxx shim contract: write the v1 report to the
+    // --report path, exit 2 (= below threshold-break WITH a valid report).
+    const stub = join(dir, "stub-stryker-cxx");
+    writeFileSync(
+      stub,
+      `#!/bin/bash
+report=""
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--report" ]; then report="$a"; fi
+  prev="$a"
+done
+cat > "$report" <<'JSON'
+{"schemaVersion":"stryker-cxx.report.v1","tool":"stryker-cxx","targetFiles":["src/a.cpp"],"totalMutants":5,"killed":2,"survived":3,"buildErrors":0,"checkErrors":0,"noCoverage":0,"timeouts":0,"ignored":0,"score":0.4,"thresholds":{"high":0.9,"low":0.7,"break":0.5,"status":"failed"},"dryRun":{"status":"PASSED"}}
+JSON
+exit 2
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const r = runMutationAnalysis(dir, ["src/a.cpp"], {
+        tool: "stryker-cxx",
+        buildCommand: "true",
+        testCommand: "true",
+        strykerCxxBinary: stub,
+      } as MutationConfig);
+      assert.equal(r.error, null, "exit 2 with a valid report must parse, not mask");
+      assert.equal(r.totalMutants, 5);
+      assert.equal(r.thresholds?.status, "failed");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
