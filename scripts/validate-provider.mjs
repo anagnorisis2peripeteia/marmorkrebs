@@ -24,10 +24,12 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const { runMutationAnalysis } = await import(join(ROOT, "dist/runner.js"));
+// pathToFileURL: a bare absolute path is not a valid ESM specifier on Windows
+// (ERR_UNSUPPORTED_ESM_URL_SCHEME — caught by this job's first windows run).
+const { runMutationAnalysis } = await import(pathToFileURL(join(ROOT, "dist/runner.js")).href);
 
 // Tool binaries often live outside a lean shell's PATH; make the validator (and the
 // runs it spawns) see the standard per-user install dirs.
