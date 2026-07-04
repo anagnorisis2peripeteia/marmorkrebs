@@ -9,19 +9,21 @@ export interface ScopedTarget {
 }
 
 export function parseScopedTargets(entries: string[]): ScopedTarget[] {
-  const byFile = new Map<string, Array<[number, number]>>();
+  const byFile = new Map<string, { ranges: Array<[number, number]>; whole: boolean }>();
   for (const entry of entries) {
     const m = entry.match(/^(.*?):(\d+)(?:-(\d+))?$/);
     const file = m ? m[1] : entry;
-    const existing = byFile.get(file) ?? [];
+    const existing = byFile.get(file) ?? { ranges: [], whole: false };
     if (m) {
       const start = parseInt(m[2], 10);
       const end = m[3] === undefined ? start : parseInt(m[3], 10);
-      existing.push([start, end]);
+      existing.ranges.push([start, end]);
+    } else {
+      existing.whole = true; // a bare entry means whole-file scope — it WINS over ranges
     }
     byFile.set(file, existing);
   }
-  return [...byFile].map(([file, ranges]) => ({ file, ranges }));
+  return [...byFile].map(([file, v]) => ({ file, ranges: v.whole ? [] : v.ranges }));
 }
 
 export function matchesScope(

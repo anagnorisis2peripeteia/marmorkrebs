@@ -12,11 +12,10 @@ describe("parseScopedTargets", () => {
     ]);
   });
 
-  it("whole-file entry beats a ranged duplicate (union with everything)", () => {
+  it("whole-file entry beats a ranged duplicate", () => {
     const t = parseScopedTargets(["a.go:5-6", "a.go"]);
-    assert.equal(t.length, 1);
-    // ranges [[5,6]] remain but a bare entry adds no range — matchesScope still
-    // honors the listed ranges; scope stays as derived
+    assert.deepEqual(t, [{ file: "a.go", ranges: [] }]);
+    assert.ok(matchesScope("a.go", 999, t), "whole-file intent must not be narrowed");
   });
 });
 
