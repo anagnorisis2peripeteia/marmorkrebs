@@ -50,3 +50,10 @@ describe("scope-lines and exclude-mutations flags", () => {
     assert.deepEqual(o.excludeMutations, ["StringLiteral", "ObjectLiteral"]);
   });
 });
+
+describe("report-file flag", () => {
+  it("parses and resolves the path", () => {
+    const o = parseCliArgs(argv("--tool", "gomu", "--report-file", "out/report.json"));
+    assert.ok(o.reportFile?.endsWith("/out/report.json") || o.reportFile?.endsWith("\\out\\report.json"));
+  });
+});

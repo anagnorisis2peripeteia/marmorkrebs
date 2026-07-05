@@ -64,3 +64,18 @@ Before opening a PR:
 - `npm run lint` passes;
 - provider docs match the exposed CLI flags;
 - new provider behavior has focused parser or command-builder coverage.
+
+## Lane rules (hard-learned)
+
+- **No dormant lanes:** a new tool lane enters `QUARANTINED_TOOLS` and stays there until a
+  `fixtures/<tool>` project passes `node scripts/validate-provider.mjs <tool>` against the
+  REAL binary. Parser unit tests with hand-written fixtures cannot detect a wrong CLI flag
+  or a report written to disk instead of stdout.
+- **Captured fixtures only:** parser-test fixtures must be captured from real tool output
+  and marked with the tool version + capture date.
+- **Scrub before, clean after:** any lane whose tool writes report files must delete prior
+  reports BEFORE running (a leftover report + non-zero exit reads as a trusted threshold
+  verdict — the stale-report fail-open class) and leave the target repo clean afterwards
+  (the validator's artifact check enforces it).
+- **Exit codes end-to-end:** never `runner && cat report` (drops the report on exit 2);
+  never judge any step through a pipe. `runner; code=$?; cat report; exit $code`.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getChangedFilesFromGit, getChangedLineRangesFromGit } from "./git-changed-files.js";
 import { runMutationAnalysis } from "./runner.js";
@@ -56,6 +56,8 @@ Options:
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
   --allow-empty             Let a zero-mutant result pass (default: a 0-mutant run is an error)
+  --report-file <path>      Also write the MutationResult JSON to <path> (written before
+                            exit-code evaluation, so gate evidence exists even for failures)
   --threshold-high <0-1>    stryker-cxx only: healthy score band
   --threshold-low <0-1>     stryker-cxx only: warning score band
   --threshold-break <0-1>   stryker-cxx only: failing score band
@@ -328,6 +330,13 @@ function main(): void {
   const result = runMutationAnalysis(repoDir, changedFiles, config);
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+
+  if (opts.reportFile) {
+    // Written BEFORE the error/threshold exits: the artifact must exist precisely
+    // when the gate fails, or the evidence trail only covers the happy path.
+    writeFileSync(opts.reportFile, JSON.stringify(result, null, 2) + "\n");
+    console.error(`[marmorkrebs] report written to ${opts.reportFile}`);
+  }
 
   if (result.error) {
     console.error(`[marmorkrebs] error: ${result.error}`);
