@@ -170,7 +170,13 @@ A successful run exits zero and writes a `MutationResult` JSON object to stdout.
 - `noCoverage`: mutants skipped because supplied coverage data did not cover their line, plus legacy non-viable C++ counts normalized into Marmorkrebs' common shape.
 - `survivingMutants`: mutants not killed by the selected tests.
 
-For PR gates, treat `totalMutants: 0` as vacuous proof rather than strong evidence. Also treat `totalMutants - ignored == 0` as no scored mutation proof. A survivor is a signal that the test plan may not cover the behavior being changed. A failed `dryRun` is an infrastructure/test-selection error, not a mutation pass.
+Since 2026-07-05 a `totalMutants: 0` run is a hard ERROR unless `--allow-empty` marks the
+emptiness intentional (docs/test/fixtures-only diffs) — vacuous passes are always explicit.
+An all-`Ignored` stryker-net result also errors (filter-matched-nothing guard). Prefer
+`--scope-lines` with `--base` so mutation covers only PR-touched line ranges, add
+`--exclude-mutations <names>` for documented low-signal mutators on the stryker lane, and
+`--report-file <path>` to keep the JSON artifact for gate evidence (written even when the
+gate fails). A survivor is a signal that the test plan may not cover the behavior being changed. A failed `dryRun` is an infrastructure/test-selection error, not a mutation pass.
 
 ## Relationship to ClawSweeper and local Mantis
 

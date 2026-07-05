@@ -135,6 +135,10 @@ export function parseGomu(output: string, changedFiles?: string[]): MutationResu
 // gomu (v0.2.1) exits 0 when mutants merely survive and non-zero only on real
 // errors, so any failed run aborts the chain and a partial result can never be
 // scored as a full one.
+// timeoutSecs is gomu's PER-TEST timeout — deliberately NOT derived from
+// config.timeoutMs, which bounds the whole command; mapping one onto the other
+// would give per-test budgets that scale with suite size. Wire a dedicated
+// config field if a lane ever needs a different per-test budget.
 export function buildGomuCommand(
   sourceFiles: string[],
   workDir: string,
