@@ -99,10 +99,21 @@ export function runMutationAnalysis(
       error: `${config.tool} lane is quarantined (never validated against the real tool): ${quarantine}. Fix the adapter and make scripts/validate-provider.mjs pass before use.`,
     };
   }
-  if (!changedFiles.length) return { ...EMPTY_RESULT, tool: config.tool };
+  // Static-empty is fail-closed like runtime-empty (2026-07-04 consistency fix):
+  // a diff with nothing mutatable passes ONLY with an explicit --allow-empty, so a
+  // docs/test-only PR says so out loud instead of scoring a silent vacuous 100%.
+  const staticEmpty = (why: string): MutationResult =>
+    config.allowEmpty
+      ? { ...EMPTY_RESULT, tool: config.tool }
+      : {
+          ...EMPTY_RESULT,
+          tool: config.tool,
+          error: `${why} — pass --allow-empty if this diff legitimately has nothing to mutate`,
+        };
+  if (!changedFiles.length) return staticEmpty("no changed files");
 
   const sourceFiles = filterSourceFiles(changedFiles, config.tool);
-  if (!sourceFiles.length) return { ...EMPTY_RESULT, tool: config.tool };
+  if (!sourceFiles.length) return staticEmpty("no mutatable sources in the diff");
 
   const startMs = Date.now();
 

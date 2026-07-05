@@ -288,11 +288,16 @@ describe(
 );
 
 describe("fixtures are test data, not mutation targets", () => {
-  it("a fixtures-only diff yields no mutatable sources", () => {
-    const r = runMutationAnalysis("/repo", ["fixtures/stryker/lib/tested.js", "fixtures/gomu/a.go"], {
+  it("a fixtures-only diff errors without --allow-empty, passes vacuously with it", () => {
+    const files = ["fixtures/stryker/lib/tested.js", "fixtures/gomu/a.go"];
+    const strict = runMutationAnalysis("/repo", files, { tool: "stryker" } as MutationConfig);
+    assert.match(strict.error ?? "", /no mutatable sources/);
+
+    const allowed = runMutationAnalysis("/repo", files, {
       tool: "stryker",
+      allowEmpty: true,
     } as MutationConfig);
-    assert.equal(r.totalMutants, 0);
-    assert.equal(r.error, null); // static early-return, same as a test-only diff
+    assert.equal(allowed.error, null);
+    assert.equal(allowed.totalMutants, 0);
   });
 });

@@ -21,9 +21,21 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
+## Gate-relevant flags
+
+| Flag | Effect |
+|---|---|
+| `--base <ref>` | derive changed files from the local diff vs `<ref>` |
+| `--scope-lines` | with `--base`: mutate only PR-touched LINE RANGES (stryker native; gomu/cargo-mutants parser-side; mutmut/go-mutesting degrade to file scope) |
+| `--exclude-mutations <a,b>` | stryker lane: drop documented low-signal mutators (e.g. `StringLiteral`) |
+| `--allow-empty` | let a zero-mutant result pass — required for docs/test/fixtures-only diffs, which otherwise ERROR (never excuses a tool failure) |
+| `--report-file <path>` | also write the MutationResult JSON artifact (written before exit-code evaluation, so failing gates keep their evidence) |
+| `--threshold <0-1>` | minimum score; exit 2 below it |
+
 **Fail-closed contract:** a result only counts with evidence. The runner reconciles the
 child exit code/signal against the parsed report (`reconcileResult`); a zero-mutant run is
-an error unless `--allow-empty` is passed, and a quarantined lane (runner.ts
+an error unless `--allow-empty` is passed — including STATIC empties (docs/test/fixtures-only
+diffs), so vacuous 100%s are always explicit — and a quarantined lane (runner.ts
 `QUARANTINED_TOOLS` — empty since 2026-07-03, all lanes validated) refuses to run rather
 than produce plausible wrongness. A lane leaves quarantine only when a `fixtures/<tool>`
 project passes `node scripts/validate-provider.mjs <tool>` against the real binary —

@@ -61,6 +61,7 @@ export function parseCliArgs(argv: string[]): {
   timeout?: number;
   threshold?: number;
   allowEmpty?: boolean;
+  reportFile?: string;
   scopeLines?: boolean;
   excludeMutations?: string[];
   thresholdHigh?: number;
@@ -308,6 +309,7 @@ export function parseCliArgs(argv: string[]): {
   if (args["lease-id"]) result.leaseId = args["lease-id"];
   if ("skip-sync" in args) result.skipSync = true;
   if ("allow-empty" in args) result.allowEmpty = true;
+  if (args["report-file"]) result.reportFile = resolve(args["report-file"]);
   if ("scope-lines" in args) result.scopeLines = true;
   if (args["exclude-mutations"]) result.excludeMutations = splitCommaList(args["exclude-mutations"]);
   if (args["remote-dir"]) result.remoteDir = args["remote-dir"];
