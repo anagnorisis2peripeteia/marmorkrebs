@@ -96,15 +96,18 @@ const SPECS = {
     fixture: "fixtures/stryker-cxx",
     changedFiles: ["calc.cpp"],
     config: {
-      // build product goes OUTSIDE the target repo — the shim restores sources
-      // between mutants but not build artifacts, and the hygiene check below
-      // requires the target to stay clean.
-      buildCommand: 'c++ -std=c++17 calc.cpp -o "${TMPDIR:-/tmp}/marmorkrebs-cxx-fixture-test"',
-      testCommand: '"${TMPDIR:-/tmp}/marmorkrebs-cxx-fixture-test"',
+      // Build product goes one level ABOVE the target (= inside the validator's
+      // throwaway work dir, outside the hygiene-checked fixture copy): the shim
+      // restores sources between mutants but not build artifacts. Plain relative
+      // path — no shell-specific ${VAR} syntax.
+      buildCommand: "c++ -std=c++17 calc.cpp -o ../calc-test",
+      testCommand: "../calc-test",
     },
     minMutants: 2,
-    survivorsIn: ["calc.cpp"], // sub() is untested
+    survivorsIn: ["calc.cpp"], // clamp_sub() is untested
     noSurvivorsIn: [],
+    // Guards a regression to building INSIDE the target (the artifact lives in
+    // the work dir above it; its appearance here means the build command moved).
     forbiddenArtifacts: ["calc-test"],
   },
   "stryker-net": {
