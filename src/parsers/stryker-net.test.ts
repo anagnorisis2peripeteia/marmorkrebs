@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseStrykerNet } from "./stryker-net.js";
+import { buildStrykerNetCommand, parseStrykerNet } from "./stryker-net.js";
 
 describe("parseStrykerNet", () => {
   it("parses Stryker.NET mutation-report.json", () => {
@@ -56,5 +56,46 @@ describe("parseStrykerNet", () => {
     assert.equal(result.killed, 0);
     assert.equal(result.survived, 0);
     assert.equal(result.score, 1);
+  });
+});
+
+describe("mutate glob anchoring and vacuous-ignore guard", () => {
+  it("anchors repo-relative patterns with **/ and strips line ranges", () => {
+    const cmd = buildStrykerNetCommand(["Lib/Calc.cs:5-9", "Other.cs"], "/repo");
+    assert.ok(cmd.includes("--mutate '**/Lib/Calc.cs'"));
+    assert.ok(cmd.includes("--mutate '**/Other.cs'"));
+    assert.ok(!cmd.includes("5-9"));
+  });
+
+  it("errors when every mutant is Ignored (filter matched nothing)", () => {
+    // Shape captured from the providers-windows CI run 2026-07-04: dotnet-stryker
+    // 4.x, both mutants Ignored because the mutate glob resolved against the
+    // project dir, not the repo root.
+    const report = {
+      files: {
+        "Calc.cs": {
+          mutants: [
+            { status: "Ignored", mutatorName: "Arithmetic", location: { start: { line: 5 } } },
+            { status: "Ignored", mutatorName: "Arithmetic", location: { start: { line: 7 } } },
+          ],
+        },
+      },
+    };
+    const r = parseStrykerNet(JSON.stringify(report));
+    assert.notEqual(r.error, null);
+    assert.match(r.error ?? "", /Ignored/);
+  });
+});
+
+describe("stryker-net exit-code and cleanup chain", () => {
+  it("preserves the runner exit code and removes output dirs after cat", () => {
+    const cmd = buildStrykerNetCommand(["Lib/Calc.cs"], "/repo");
+    assert.ok(
+      cmd.startsWith("cd '/repo' && rm -rf .marmorkrebs-stryker StrykerOutput && "),
+      "prior-run reports must be scrubbed BEFORE the run (stale-report fail-open class)",
+    );
+    assert.ok(cmd.includes("; code=$?; "));
+    assert.ok(cmd.includes("rm -rf .marmorkrebs-stryker StrykerOutput; exit $code"));
+    assert.ok(!cmd.includes(">/dev/null 2>&1"), "progress goes to stderr, not the void");
   });
 });
