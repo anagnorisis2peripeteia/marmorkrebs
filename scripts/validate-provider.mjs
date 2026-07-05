@@ -91,6 +91,22 @@ const SPECS = {
     // config must be cleaned up.
     forbiddenArtifacts: [".marmorkrebs-stryker.json"],
   },
+  "stryker-cxx": {
+    binary: "stryker-cxx", // the local shim (PYTHONPATH python package); CI skips when absent
+    fixture: "fixtures/stryker-cxx",
+    changedFiles: ["calc.cpp"],
+    config: {
+      // build product goes OUTSIDE the target repo — the shim restores sources
+      // between mutants but not build artifacts, and the hygiene check below
+      // requires the target to stay clean.
+      buildCommand: 'c++ -std=c++17 calc.cpp -o "${TMPDIR:-/tmp}/marmorkrebs-cxx-fixture-test"',
+      testCommand: '"${TMPDIR:-/tmp}/marmorkrebs-cxx-fixture-test"',
+    },
+    minMutants: 2,
+    survivorsIn: ["calc.cpp"], // sub() is untested
+    noSurvivorsIn: [],
+    forbiddenArtifacts: ["calc-test"],
+  },
   "stryker-net": {
     binary: "dotnet-stryker", // dotnet tool install -g dotnet-stryker (Windows CI job; local run needs the dotnet SDK)
     fixture: "fixtures/stryker-net",

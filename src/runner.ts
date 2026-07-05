@@ -36,8 +36,10 @@ import {
 // instead of producing plausible wrongness (see 2026-07-03 audit — the gomu lane
 // shipped broken for three weeks). Lifting an entry requires fixing the adapter
 // against a REAL install, adding a fixtures/<tool> project, and a passing
-// `node scripts/validate-provider.mjs <tool>`. All lanes validated as of 2026-07-03.
-const QUARANTINED_TOOLS: Partial<Record<MutationTool, string>> = {};
+// `node scripts/validate-provider.mjs <tool>`.
+const QUARANTINED_TOOLS: Partial<Record<MutationTool, string>> = {
+  mull: "the mull fallback chain has never been validated against a real mull binary (none installed on any of our boxes); use --tool stryker-cxx, or lift via a fixtures/mull project + validator spec when mull is actually needed",
+};
 
 interface ExecEvidence {
   exitCode: number;
