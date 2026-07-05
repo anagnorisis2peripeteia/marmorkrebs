@@ -90,6 +90,10 @@ describe("mutate glob anchoring and vacuous-ignore guard", () => {
 describe("stryker-net exit-code and cleanup chain", () => {
   it("preserves the runner exit code and removes output dirs after cat", () => {
     const cmd = buildStrykerNetCommand(["Lib/Calc.cs"], "/repo");
+    assert.ok(
+      cmd.startsWith("cd '/repo' && rm -rf .marmorkrebs-stryker StrykerOutput && "),
+      "prior-run reports must be scrubbed BEFORE the run (stale-report fail-open class)",
+    );
     assert.ok(cmd.includes("; code=$?; "));
     assert.ok(cmd.includes("rm -rf .marmorkrebs-stryker StrykerOutput; exit $code"));
     assert.ok(!cmd.includes(">/dev/null 2>&1"), "progress goes to stderr, not the void");
