@@ -301,3 +301,10 @@ describe("fixtures are test data, not mutation targets", () => {
     assert.equal(allowed.totalMutants, 0);
   });
 });
+
+describe("quarantine registry", () => {
+  it("mull refuses to run until validated against a real binary", () => {
+    const r = runMutationAnalysis("/nonexistent", ["x.cpp"], { tool: "mull" } as MutationConfig);
+    assert.match(r.error ?? "", /quarantined/);
+  });
+});

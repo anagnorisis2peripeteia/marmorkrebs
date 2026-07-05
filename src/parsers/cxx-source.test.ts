@@ -697,3 +697,12 @@ describe("report chains preserve the runner exit code", () => {
     assert.ok(cmd.includes('; code=$?; cat "$report"; rm -f "$report"; exit $code'));
   });
 });
+
+describe("removed built-in engine branch", () => {
+  it("a config reaching the old fallthrough throws instead of running unvalidated code", () => {
+    assert.throws(
+      () => buildCxxSourceCommand(["a.cpp"], "/repo", { tool: "gomu", buildCommand: "make", testCommand: "ctest" } as any),
+      /unsupported cxx-source configuration/,
+    );
+  });
+});

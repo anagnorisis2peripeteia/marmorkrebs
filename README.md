@@ -16,8 +16,8 @@ Instead of mutation-testing a whole repo (slow, noisy), marmorkrebs focuses the 
 | `cargo-mutants` | Rust | validated 2026-07-03 (v27.1; needs a rust toolchain at runtime) |
 | `go-mutesting` | Go | validated 2026-07-03 (**avito-tech fork only** — zimmski upstream finds 0 mutants on Go modules) |
 | `gomu` | Go | validated 2026-07-03 (`npm run validate:provider gomu`) |
-| `stryker-cxx` | C++/ObjC++/Metal | validated in use (`validate:stryker-cxx-provider`) |
-| `mull` | C++/ObjC++ (optional; use when you want the Mull path) | shares the stryker-cxx engine |
+| `stryker-cxx` | C++/ObjC++/Metal | validated 2026-07-05 (`npm run validate:provider stryker-cxx`) + bridge smoke |
+| `mull` | C++/ObjC++ | **quarantined** — fallback chain never validated, no mull binary anywhere; use `stryker-cxx` |
 
 Each tool has a parser (`src/parsers/`) that normalizes its output into a common `MutationReport` (killed / survived / timeout / no-coverage / ignored counts, plus score).
 
@@ -36,7 +36,7 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 child exit code/signal against the parsed report (`reconcileResult`); a zero-mutant run is
 an error unless `--allow-empty` is passed — including STATIC empties (docs/test/fixtures-only
 diffs), so vacuous 100%s are always explicit — and a quarantined lane (runner.ts
-`QUARANTINED_TOOLS` — empty since 2026-07-03, all lanes validated) refuses to run rather
+`QUARANTINED_TOOLS` — currently: `mull`) refuses to run rather
 than produce plausible wrongness. A lane leaves quarantine only when a `fixtures/<tool>`
 project passes `node scripts/validate-provider.mjs <tool>` against the real binary —
 parser unit tests alone cannot detect a wrong CLI flag or a report written to disk

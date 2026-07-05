@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import {
   EMPTY_RESULT,
   type MutationConfig,
@@ -96,9 +95,7 @@ interface CxxTargetSpec {
   lines: string[];
 }
 
-function enginePath(): string {
-  return fileURLToPath(new URL("../../engines/cxx-source/marmorkrebs-cxx.py", import.meta.url));
-}
+
 
 export function buildCxxSourceCommand(
   sourceFiles: string[],
@@ -125,46 +122,13 @@ export function buildCxxSourceCommand(
     );
   }
 
-  if (!config.buildCommand || !config.testCommand) {
-    throw new Error("cxx-source requires --build-command and --test-command");
-  }
-
-  const engine = enginePath();
-  const { files, lines } = parseScopedCxxTargets(sourceFiles);
-
-  const parts = [
-    "python3",
-    `'${shellEscape(engine)}'`,
-    "--repo-dir",
-    `'${shellEscape(workDir)}'`,
-    "--files",
-    `'${shellEscape(files.join(","))}'`,
-  ];
-  if (lines.length) {
-    parts.push("--lines", `'${shellEscape(lines.join(","))}'`);
-  }
-  if (config.base) {
-    parts.push("--diff-base", `'${shellEscape(config.base)}'`);
-  }
-  parts.push("--build-cmd", `'${shellEscape(config.buildCommand)}'`);
-  parts.push("--test-cmd", `'${shellEscape(config.testCommand)}'`);
-  if (config.maxMutants !== undefined) {
-    parts.push("--max-mutants", String(config.maxMutants));
-  }
-  if (config.includeMetal) {
-    parts.push("--include-metal");
-  }
-  if (config.mutators) {
-    parts.push("--mutators", `'${shellEscape(config.mutators)}'`);
-  }
-  if (config.mode) {
-    parts.push("--mode", `'${shellEscape(config.mode)}'`);
-  }
-  // The engine's own progress goes to stdout; redirect it to stderr and emit
-  // only the JSON report (written to a temp file) on stdout. Capture the runner's
-  // exit code BEFORE cat so it propagates (exit 2 = below threshold-break with a
-  // valid report — reconcileResult trusts a parsed report on non-zero exit).
-  return `report="$(mktemp)" && ${parts.join(" ")} --report "$report" 1>&2; code=$?; cat "$report"; rm -f "$report"; exit $code`;
+  // The in-tree python engine was removed 2026-07-05: the runner dispatches ONLY
+  // stryker-cxx (external shim) and mull (with stryker-cxx fallback) into this
+  // file, so the engine branch was unreachable, unvalidated, and carried the
+  // codebase's only unkillable mutants.
+  throw new Error(
+    `unsupported cxx-source configuration for tool '${config.tool}' — use --tool stryker-cxx or --tool mull`,
+  );
 }
 
 function buildMullWithFallbackCxxSourceCommand(
