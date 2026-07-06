@@ -72,6 +72,24 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.notEqual(r.error, null);
   });
 
+  it("errors when mutants exist but NONE were scored (vacuous run, any lane)", () => {
+    // gomu all-notViable / cargo-mutants all-unviable / stryker all-Ignored shapes:
+    // totalMutants > 0 so the empty-run check passes, but nothing was scored.
+    const r = reconcileResult(
+      result({ totalMutants: 7, ignored: 7, score: 1 }),
+      OK_EXEC,
+      { tool: "gomu" } as MutationConfig,
+    );
+    assert.match(r.error ?? "", /NONE were scored/);
+
+    const withAllowEmpty = reconcileResult(
+      result({ totalMutants: 7, ignored: 7, score: 1 }),
+      OK_EXEC,
+      { tool: "gomu", allowEmpty: true } as MutationConfig,
+    );
+    assert.notEqual(withAllowEmpty.error, null, "allowEmpty covers empty DIFFS, not vacuous runs");
+  });
+
   it("trusts a parsed result with mutants despite non-zero exit (tool's own gate)", () => {
     const r = reconcileResult(
       result({ totalMutants: 10, killed: 6, survived: 4, score: 0.6 }),
