@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reconcileResult, runMutationAnalysis } from "./runner.js";
@@ -175,8 +175,11 @@ describe(
   let dir: string;
   let calls: string;
 
+  let repoDir: string;
+
   function makeFake(mode: string) {
     dir = mkdtempSync(join(tmpdir(), "marmorkrebs-fakecrab-runner-"));
+    repoDir = mkdtempSync(join(tmpdir(), "marmorkrebs-fakecrab-repo-"));
     calls = join(dir, "calls.log");
     writeFileSync(calls, "");
     const bin = join(dir, "crabbox");
@@ -201,6 +204,7 @@ esac
   function cleanupFake() {
     delete process.env.CRABBOX_BIN;
     rmSync(dir, { recursive: true, force: true });
+    rmSync(repoDir, { recursive: true, force: true });
   }
 
   function callLog(): string[] {
@@ -210,7 +214,7 @@ esac
   it("runInCrabbox full lifecycle: parses report; stop+cleanup always run", () => {
     makeFake("ok");
     try {
-      const r = runMutationAnalysis("/repo", ["a.go"], {
+      const r = runMutationAnalysis(repoDir, ["a.go"], {
         tool: "gomu",
         crabbox: { provider: "tart" },
       } as MutationConfig);
@@ -225,7 +229,7 @@ esac
   it("runInCrabbox exec failure fails closed AND still stops/cleans the lease", () => {
     makeFake("dead");
     try {
-      const r = runMutationAnalysis("/repo", ["a.go"], {
+      const r = runMutationAnalysis(repoDir, ["a.go"], {
         tool: "gomu",
         crabbox: { provider: "tart" },
       } as MutationConfig);
@@ -240,7 +244,7 @@ esac
   it("runOnExistingLease with skipSync never syncs", () => {
     makeFake("ok");
     try {
-      const r = runMutationAnalysis("/repo", ["a.go"], {
+      const r = runMutationAnalysis(repoDir, ["a.go"], {
         tool: "gomu",
         leaseId: "fake-lease-9",
         skipSync: true,
@@ -255,7 +259,7 @@ esac
   it("runOnExistingLease sync failure is an error and skips exec", () => {
     makeFake("syncfail");
     try {
-      const r = runMutationAnalysis("/repo", ["a.go"], {
+      const r = runMutationAnalysis(repoDir, ["a.go"], {
         tool: "gomu",
         leaseId: "fake-lease-9",
       } as MutationConfig);
@@ -324,5 +328,42 @@ describe("quarantine registry", () => {
   it("mull refuses to run until validated against a real binary", () => {
     const r = runMutationAnalysis("/nonexistent", ["x.cpp"], { tool: "mull" } as MutationConfig);
     assert.match(r.error ?? "", /quarantined/);
+  });
+});
+
+describe("per-repo lock", () => {
+  it("refuses to run while a live pid holds the lock", () => {
+    const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-lock-"));
+    writeFileSync(join(dir, "x.go"), "package x\n");
+    writeFileSync(
+      join(dir, ".marmorkrebs.lock"),
+      JSON.stringify({ pid: process.pid, started: new Date().toISOString() }),
+    );
+    try {
+      const r = runMutationAnalysis(dir, ["x.go"], { tool: "gomu" } as MutationConfig);
+      assert.match(r.error ?? "", /another marmorkrebs run/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("steals a dead-pid lock and always releases afterwards", () => {
+    const dir = mkdtempSync(join(tmpdir(), "marmorkrebs-lock2-"));
+    writeFileSync(join(dir, "go.mod"), "module locktest\n\ngo 1.21\n");
+    writeFileSync(join(dir, "x.go"), "package locktest\n\nfunc F(a int) int { return a + 1 }\n");
+    writeFileSync(
+      join(dir, ".marmorkrebs.lock"),
+      JSON.stringify({ pid: 2147483646, started: new Date().toISOString() }),
+    );
+    const origPath = process.env.PATH;
+    try {
+      process.env.PATH = "/usr/bin:/bin"; // gomu hidden: run fails, but NOT on the lock
+      const r = runMutationAnalysis(dir, ["x.go"], { tool: "gomu" } as MutationConfig);
+      assert.doesNotMatch(r.error ?? "", /another marmorkrebs run/);
+      assert.ok(!existsSync(join(dir, ".marmorkrebs.lock")), "lock must be released in finally");
+    } finally {
+      process.env.PATH = origPath;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -57,7 +57,7 @@ describe("parseStryker", () => {
     assert.equal(result.noCoverage, 1);
     assert.equal(result.ignored, 1);
     assert.equal(result.totalMutants, 6);
-    assert.equal(result.score, 0.5); // 2 / (2 + 1 + 1)
+    assert.equal(result.score, 0.6); // timeout counts as detected (uniform formula) // 2 / (2 + 1 + 1)
     assert.equal(result.survivingMutants.length, 2);
     assert.equal(result.survivingMutants[0].file, "src/config.ts");
     assert.equal(result.survivingMutants[0].status, "survived");

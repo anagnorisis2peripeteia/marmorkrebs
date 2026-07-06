@@ -1,4 +1,4 @@
-import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 
 // Ground truth (avito-tech/go-mutesting fork, probed live 2026-07-03 — the original
 // zimmski upstream finds 0 mutants on modern Go modules and is NOT supported): per
@@ -46,6 +46,8 @@ export function parseGoMutesting(output: string, changedFiles: string[] = []): M
 
   const scoreMatch = output.match(/The mutation score is ([\d.]+)/);
   const total = killed + survived;
+  // scoreMatch is only a liveness signal; the reported number is IGNORED in favor of
+  // the uniform cross-lane formula (see mutationScore).
   if (total === 0 && !scoreMatch) {
     return {
       ...EMPTY_RESULT,
@@ -53,8 +55,6 @@ export function parseGoMutesting(output: string, changedFiles: string[] = []): M
       error: `no go-mutesting result lines parsed: ${output.trim().slice(0, 200)}`,
     };
   }
-  const score = scoreMatch ? parseFloat(scoreMatch[1]) : total > 0 ? killed / total : 1;
-
   return {
     tool: "go-mutesting",
     totalMutants: killed + survived + timeout,
@@ -63,7 +63,7 @@ export function parseGoMutesting(output: string, changedFiles: string[] = []): M
     timeout,
     noCoverage: 0,
     ignored: 0,
-    score: Math.round(score * 100) / 100,
+    score: mutationScore(killed, timeout, survived, 0),
     survivingMutants: mutants,
     error: null,
     elapsedMs: 0,

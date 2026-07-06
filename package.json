@@ -1,6 +1,6 @@
 {
   "name": "marmorkrebs",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Mutation testing for PRs via crabbox execution environments",
   "type": "module",
   "bin": {

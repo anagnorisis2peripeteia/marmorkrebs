@@ -32,6 +32,13 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 | `--report-file <path>` | also write the MutationResult JSON artifact (written before exit-code evaluation, so failing gates keep their evidence) |
 | `--threshold <0-1>` | minimum score; exit 2 below it |
 
+**Score formula (uniform across lanes, StrykerJS convention):**
+`score = (killed + timeout) / (killed + timeout + survived + noCoverage)` — a timeout IS
+detection (the mutant hung the suite). `ignored` never enters the formula; an all-ignored
+run is a hard error. Exception: `stryker-cxx` reports the shim's own score/thresholds
+untouched (its semantics govern the pytorch gates). Concurrent runs on one checkout are
+refused via `.marmorkrebs.lock` (dead-pid/2h-stale locks are stolen).
+
 **Fail-closed contract:** a result only counts with evidence. The runner reconciles the
 child exit code/signal against the parsed report (`reconcileResult`); a zero-mutant run is
 an error unless `--allow-empty` is passed — including STATIC empties (docs/test/fixtures-only
