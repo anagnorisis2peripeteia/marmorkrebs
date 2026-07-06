@@ -123,3 +123,10 @@ describe("stale-report scrub ordering (fail-open regression)", () => {
     }
   });
 });
+
+describe("git-exclude guard freshness", () => {
+  it("guards on the newest exclude entry so upgrades append missing lines", () => {
+    const cmd = buildStrykerCommand(["src/a.ts"], "/repo", "npm test");
+    assert.ok(cmd.includes("grep -qxF '.marmorkrebs.lock'"), "must probe the newest entry, not reports/");
+  });
+});

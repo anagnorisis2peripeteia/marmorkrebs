@@ -94,7 +94,10 @@ export function buildStrykerCommand(
   // caught live by the validator's hidden-binary probe, 2026-07-04).
   const exclude =
     `E="$(git rev-parse --git-path info/exclude 2>/dev/null)"; ` +
-    `[ -n "$E" ] && { grep -qxF 'reports/' "$E" 2>/dev/null || ` +
+    `[ -n "$E" ] && { grep -qxF '.marmorkrebs.lock' "$E" 2>/dev/null || ` +
+    // Guard on the NEWEST entry: guarding on 'reports/' skipped the append on every
+    // checkout that ran the lane before an entry was added (review catch, PR #9).
+
     `printf 'reports/\\n.stryker-tmp/\\n.marmorkrebs-stryker.json\\n.marmorkrebs.lock\\n' >> "$E"; }; true`;
 
   if (testCommand) {
