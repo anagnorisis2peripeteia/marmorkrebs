@@ -1,4 +1,7 @@
 name: ci
+# NOTE: job names below are branch-protection REQUIRED CHECKS on master —
+# renaming one strands every PR on a phantom pending check until the
+# protection rule is updated to match.
 
 on:
   push:
@@ -46,6 +49,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install mutation tools
         run: |
+          npm install -g @stryker-mutator/core typescript
           go install github.com/sivchari/gomu/cmd/gomu@latest
           go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
           pip install mutmut pytest
@@ -57,7 +61,7 @@ jobs:
         run: npm install && npm run build
       - name: Validate all provider lanes
         run: |
-          for tool in gomu go-mutesting cargo-mutants mutmut; do
+          for tool in gomu go-mutesting cargo-mutants mutmut stryker; do
             node scripts/validate-provider.mjs "$tool" || exit 1
           done
 

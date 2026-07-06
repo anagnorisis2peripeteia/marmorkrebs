@@ -69,6 +69,19 @@ export function reconcileResult(
   if (exec.signal) {
     return { ...parsed, error: `tool killed by ${exec.signal} (timeout?): ${stderrTail}` };
   }
+  const scored = parsed.killed + parsed.survived + parsed.timeout + parsed.noCoverage;
+  if (parsed.totalMutants > 0 && scored === 0) {
+    // Universal vacuous-run guard (2026-07-06): mutants existed but NONE were scored
+    // (all ignored/unviable — filters matched nothing, or the target doesn't build).
+    // Lane parsers may fire first with a sharper message (stryker-net's glob hint);
+    // this net catches every lane, including ones added later.
+    return {
+      ...parsed,
+      error:
+        `${parsed.totalMutants} mutants were generated but NONE were scored ` +
+        "(all ignored/unviable) — the run proved nothing; check scope filters and that the target builds",
+    };
+  }
   if (parsed.totalMutants === 0) {
     if (exec.exitCode !== 0) {
       return {
