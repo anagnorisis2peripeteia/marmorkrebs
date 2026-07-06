@@ -1,4 +1,4 @@
-import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 
 // Stryker.NET (`dotnet stryker`) emits the same mutation-testing-elements JSON schema as
 // StrykerJS (files -> mutants -> status), so parsing mirrors the stryker parser. Unlike
@@ -74,7 +74,7 @@ export function parseStrykerNet(output: string): MutationResult {
       error: `all ${total} mutants were Ignored — --mutate patterns likely matched nothing (glob resolution root mismatch)`,
     };
   }
-  const denominator = killed + survived + noCoverage;
+
   return {
     tool: "stryker-net",
     totalMutants: killed + survived + timeout + noCoverage + ignored,
@@ -83,7 +83,7 @@ export function parseStrykerNet(output: string): MutationResult {
     timeout,
     noCoverage,
     ignored,
-    score: denominator > 0 ? Math.round((killed / denominator) * 100) / 100 : 1,
+    score: mutationScore(killed, timeout, survived, noCoverage),
     survivingMutants: mutants,
     error: null,
     elapsedMs: 0,

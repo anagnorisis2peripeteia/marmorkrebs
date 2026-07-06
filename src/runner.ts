@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   crabboxCleanup,
@@ -101,6 +101,57 @@ export function reconcileResult(
   return parsed;
 }
 
+// Per-repo lock: two concurrent runs on the same checkout corrupt each other's
+// in-repo artifacts (the stryker lane's scrub-first rm can delete the OTHER run's
+// report mid-flight). Steal only from a dead pid or a lock older than 2h.
+const LOCK_NAME = ".marmorkrebs.lock";
+
+function acquireRepoLock(repoDir: string): (() => void) | { error: string } {
+  const lockPath = join(repoDir, LOCK_NAME);
+  const claim = JSON.stringify({ pid: process.pid, started: new Date().toISOString() });
+  const release = () => {
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // already gone — fine
+    }
+  };
+  try {
+    writeFileSync(lockPath, claim, { flag: "wx" });
+    return release;
+  } catch {
+    // EEXIST (held/stale) or ENOENT/EACCES (bad repo dir) — both handled below:
+    // the steal-write's catch converts a bad dir into a fail-closed error.
+    let held: { pid?: number; started?: string } = {};
+    try {
+      held = JSON.parse(readFileSync(lockPath, "utf8"));
+    } catch {
+      // unreadable/corrupt lock — treat as stale
+    }
+    const alive = (() => {
+      if (!held.pid) return false;
+      try {
+        process.kill(held.pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    const ageMs = held.started ? Date.now() - Date.parse(held.started) : Infinity;
+    if (alive && ageMs < 2 * 3_600_000) {
+      return {
+        error: `another marmorkrebs run (pid ${held.pid}, since ${held.started}) holds ${lockPath} — concurrent runs on one checkout corrupt each other's artifacts`,
+      };
+    }
+    try {
+      writeFileSync(lockPath, claim); // stale: dead pid, ancient, or corrupt — steal
+    } catch (e) {
+      return { error: `cannot acquire ${lockPath} (repo dir missing or unwritable): ${e}` };
+    }
+    return release;
+  }
+}
+
 export function runMutationAnalysis(
   repoDir: string,
   changedFiles: string[],
@@ -130,6 +181,12 @@ export function runMutationAnalysis(
   const sourceFiles = filterSourceFiles(changedFiles, config.tool);
   if (!sourceFiles.length) return staticEmpty("no mutatable sources in the diff");
 
+  const lock = acquireRepoLock(repoDir);
+  if (typeof lock !== "function") {
+    return { ...EMPTY_RESULT, tool: config.tool, error: lock.error };
+  }
+  try {
+
   const startMs = Date.now();
 
   if (config.leaseId) {
@@ -139,6 +196,9 @@ export function runMutationAnalysis(
     return runInCrabbox(repoDir, sourceFiles, config, startMs);
   }
   return runLocally(repoDir, sourceFiles, config, startMs);
+  } finally {
+    lock();
+  }
 }
 
 function runOnExistingLease(

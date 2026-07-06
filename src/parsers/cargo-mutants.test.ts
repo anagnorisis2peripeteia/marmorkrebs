@@ -40,7 +40,7 @@ describe("parseCargoMutants (outcomes.json)", () => {
     assert.equal(r.survived, 2);
     assert.equal(r.timeout, 1);
     assert.equal(r.totalMutants, 9);
-    assert.equal(r.score, 0.63);
+    assert.equal(r.score, 0.75); // (killed+timeout)/(killed+timeout+survived)
     assert.equal(r.survivingMutants.length, 3);
     assert.equal(r.survivingMutants[0].file, "src/untested.rs");
     assert.equal(r.survivingMutants[0].line, 2);

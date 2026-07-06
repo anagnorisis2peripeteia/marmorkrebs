@@ -1,4 +1,4 @@
-import { type MutationResult, type SurvivingMutant } from "../types.js";
+import { type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 import { matchesScope, parseScopedTargets } from "./scope.js";
 
 interface GomuResult {
@@ -91,7 +91,6 @@ export function parseGomu(output: string, changedFiles?: string[]): MutationResu
 
     const { killed, survived, timedOut, errors, notViable } = stats;
     const total = killed + survived + timedOut + errors;
-    const denom = killed + survived + timedOut;
     const durationNs = durationNsTotal;
 
     return {
@@ -102,7 +101,7 @@ export function parseGomu(output: string, changedFiles?: string[]): MutationResu
       timeout: timedOut,
       noCoverage: 0,
       ignored: 0,
-      score: denom > 0 ? Math.round((killed / denom) * 100) / 100 : 1,
+      score: mutationScore(killed, timedOut, survived + errors, 0),
       survivingMutants: mutants,
       error: null,
       elapsedMs: Math.round(durationNs / 1_000_000),

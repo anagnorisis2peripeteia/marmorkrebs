@@ -63,7 +63,7 @@ describe("parseGomu", () => {
     assert.equal(result.survived, 2);
     assert.equal(result.timeout, 1);
     assert.equal(result.totalMutants, 9);
-    assert.equal(result.score, 0.63);
+    assert.equal(result.score, 0.75); // timeout counts as detected
     assert.equal(result.survivingMutants.length, 2);
     assert.equal(result.survivingMutants[0].file, "internal/config.go");
     assert.equal(result.survivingMutants[0].status, "survived");
@@ -167,7 +167,7 @@ describe("parseGomu multi-report stream", () => {
     assert.equal(result.survived, 1);
     assert.equal(result.timeout, 1);
     assert.equal(result.totalMutants, 8);
-    assert.equal(result.score, 0.71);
+    assert.equal(result.score, 0.86); // (5+1)/7 — timeout detected
     assert.equal(result.survivingMutants.length, 2);
     assert.equal(result.survivingMutants[0].file, "a.go");
     assert.equal(result.survivingMutants[1].file, "b.go");

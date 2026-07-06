@@ -162,6 +162,25 @@ export interface MutationResult {
   elapsedMs: number;
 }
 
+/**
+ * Uniform mutation score across lanes (StrykerJS convention): a TIMEOUT counts as
+ * DETECTED — the mutant made the suite hang, which is detection, not escape.
+ *   score = (killed + timeout) / (killed + timeout + survived + noCoverage)
+ * `ignored` never enters the formula (and an all-ignored run is a hard error via
+ * reconcileResult's vacuous-run guard). Exception: stryker-cxx reports the shim's
+ * own thresholds/score untouched — the shim's semantics govern the pytorch gates.
+ */
+export function mutationScore(
+  killed: number,
+  timeout: number,
+  survived: number,
+  noCoverage: number,
+): number {
+  const detected = killed + timeout;
+  const denom = detected + survived + noCoverage;
+  return denom > 0 ? Math.round((detected / denom) * 100) / 100 : 1;
+}
+
 export const EMPTY_RESULT: MutationResult = {
   tool: "none",
   totalMutants: 0,

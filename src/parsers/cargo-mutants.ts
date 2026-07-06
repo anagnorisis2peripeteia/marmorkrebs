@@ -1,4 +1,4 @@
-import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 import { matchesScope, parseScopedTargets } from "./scope.js";
 
 // Ground truth (cargo-mutants v27.1.0, probed live 2026-07-03): results are NEVER on
@@ -74,7 +74,6 @@ export function parseCargoMutants(output: string, changedFiles: string[] = []): 
         }
       }
     }
-    const denom = killed + survived + timeout;
     return {
       tool: "cargo-mutants",
       totalMutants: hasRanges
@@ -85,7 +84,7 @@ export function parseCargoMutants(output: string, changedFiles: string[] = []): 
       timeout,
       noCoverage: 0,
       ignored: notViable,
-      score: denom > 0 ? Math.round((killed / denom) * 100) / 100 : 1,
+      score: mutationScore(killed, timeout, survived, 0),
       survivingMutants: mutants,
       error: null,
       elapsedMs: 0,

@@ -1,4 +1,4 @@
-import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 
 export function parseStryker(output: string): MutationResult {
   const mutants: SurvivingMutant[] = [];
@@ -59,7 +59,7 @@ export function parseStryker(output: string): MutationResult {
     };
   }
 
-  const denominator = killed + survived + noCoverage;
+
   return {
     tool: "stryker",
     totalMutants: killed + survived + timeout + noCoverage + ignored,
@@ -68,7 +68,7 @@ export function parseStryker(output: string): MutationResult {
     timeout,
     noCoverage,
     ignored,
-    score: denominator > 0 ? Math.round((killed / denominator) * 100) / 100 : 1,
+    score: mutationScore(killed, timeout, survived, noCoverage),
     survivingMutants: mutants,
     error: null,
     elapsedMs: 0,
@@ -94,8 +94,11 @@ export function buildStrykerCommand(
   // caught live by the validator's hidden-binary probe, 2026-07-04).
   const exclude =
     `E="$(git rev-parse --git-path info/exclude 2>/dev/null)"; ` +
-    `[ -n "$E" ] && { grep -qxF 'reports/' "$E" 2>/dev/null || ` +
-    `printf 'reports/\\n.stryker-tmp/\\n.marmorkrebs-stryker.json\\n' >> "$E"; }; true`;
+    `[ -n "$E" ] && { grep -qxF '.marmorkrebs.lock' "$E" 2>/dev/null || ` +
+    // Guard on the NEWEST entry: guarding on 'reports/' skipped the append on every
+    // checkout that ran the lane before an entry was added (review catch, PR #9).
+
+    `printf 'reports/\\n.stryker-tmp/\\n.marmorkrebs-stryker.json\\n.marmorkrebs.lock\\n' >> "$E"; }; true`;
 
   if (testCommand) {
     // No usable repo Stryker config: drive it with a throwaway one — the `command` test

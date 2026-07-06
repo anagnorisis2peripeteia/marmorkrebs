@@ -1,4 +1,4 @@
-import { EMPTY_RESULT, type MutationResult, type SurvivingMutant } from "../types.js";
+import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
 
 // Ground truth (mutmut 3.6.0, probed live 2026-07-03): mutmut 3 is config-driven — the
 // target repo MUST carry a [mutmut] section (setup.cfg) or [tool.mutmut] (pyproject)
@@ -76,7 +76,7 @@ export function parseMutmut(output: string, changedFiles: string[] = []): Mutati
     };
   }
 
-  const denominator = killed + survived + noCoverage;
+
   return {
     tool: "mutmut",
     totalMutants: killed + survived + timeout + noCoverage + ignored,
@@ -85,7 +85,7 @@ export function parseMutmut(output: string, changedFiles: string[] = []): Mutati
     timeout,
     noCoverage,
     ignored,
-    score: denominator > 0 ? Math.round((killed / denominator) * 100) / 100 : 1,
+    score: mutationScore(killed, timeout, survived, noCoverage),
     survivingMutants: mutants,
     error: null,
     elapsedMs: 0,

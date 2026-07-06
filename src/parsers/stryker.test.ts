@@ -57,7 +57,7 @@ describe("parseStryker", () => {
     assert.equal(result.noCoverage, 1);
     assert.equal(result.ignored, 1);
     assert.equal(result.totalMutants, 6);
-    assert.equal(result.score, 0.5); // 2 / (2 + 1 + 1)
+    assert.equal(result.score, 0.6); // timeout counts as detected (uniform formula) // 2 / (2 + 1 + 1)
     assert.equal(result.survivingMutants.length, 2);
     assert.equal(result.survivingMutants[0].file, "src/config.ts");
     assert.equal(result.survivingMutants[0].status, "survived");
@@ -121,5 +121,12 @@ describe("stale-report scrub ordering (fail-open regression)", () => {
         `scrub must be first: ${cmd.slice(0, 80)}`,
       );
     }
+  });
+});
+
+describe("git-exclude guard freshness", () => {
+  it("guards on the newest exclude entry so upgrades append missing lines", () => {
+    const cmd = buildStrykerCommand(["src/a.ts"], "/repo", "npm test");
+    assert.ok(cmd.includes("grep -qxF '.marmorkrebs.lock'"), "must probe the newest entry, not reports/");
   });
 });
