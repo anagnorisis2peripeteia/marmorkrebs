@@ -253,6 +253,30 @@ describe("parseCxxSource", () => {
     assert.ok(command.includes("--base 'origin/main'"));
   });
 
+  it("forwards --include-metal so stryker-cxx mutates .metal kernels", () => {
+    const command = buildCxxSourceCommand(
+      ["aten/src/ATen/native/mps/kernels/RenormKernel.metal"],
+      "/repo",
+      {
+        tool: "stryker-cxx",
+        buildCommand: "xcrun metal -o build/k.metallib src/k.metal",
+        testCommand: "./hosttest",
+        includeMetal: true,
+      },
+    );
+    assert.ok(command.includes("--include-metal"), command);
+    assert.ok(command.includes("RenormKernel.metal"), command);
+  });
+
+  it("omits --include-metal when Metal mutation was not requested", () => {
+    const command = buildCxxSourceCommand(["src/foo.cpp"], "/repo", {
+      tool: "stryker-cxx",
+      buildCommand: "ninja -C build target",
+      testCommand: "./target_test",
+    });
+    assert.ok(!command.includes("--include-metal"), command);
+  });
+
   it("builds mull command with stryker-cxx fallback when needed", () => {
     const command = buildCxxSourceCommand(
       ["src/foo.cpp:12", "src/bar.cpp"],
