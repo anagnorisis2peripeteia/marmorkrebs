@@ -78,18 +78,61 @@ describe("parseStryker", () => {
     assert.equal(result.score, 1);
   });
 
-  it("builds commands that emit the JSON report file to stdout", () => {
+  // Captured from a REAL @stryker-mutator/core 9.6.1 run with @stryker-mutator/typescript-checker
+  // (2026-07-08): a BlockStatement mutant whose `{}` body makes a typed function fail tsc (TS2355)
+  // is reported with status `CompileError` — the exact status string the fail-closed guard trips
+  // on. RuntimeError takes the identical throw path.
+  it("fails closed on a real Stryker CompileError mutant status", () => {
+    const captured = {
+      schemaVersion: "1.0",
+      files: {
+        "src/x.ts": {
+          language: "typescript",
+          mutants: [
+            {
+              id: "0",
+              mutatorName: "StringLiteral",
+              replacement: '""',
+              status: "Survived",
+              location: { start: { line: 1, column: 31 }, end: { line: 1, column: 34 } },
+            },
+            {
+              id: "2",
+              mutatorName: "BlockStatement",
+              replacement: "{}",
+              status: "CompileError",
+              statusReason:
+                "src/x.ts(2,24): error TS2355: A function whose declared type is neither " +
+                "'undefined', 'void', nor 'any' must return a value.\n",
+              location: { start: { line: 2, column: 31 }, end: { line: 2, column: 56 } },
+            },
+          ],
+        },
+      },
+    };
+    const result = parseStryker(JSON.stringify(captured));
+    assert.ok(result.error?.includes("CompileError"), result.error ?? "expected an error");
+    assert.equal(result.totalMutants, 0);
+  });
+
+  it("emits the JSON report file to stdout", () => {
     const command = buildStrykerCommand(["src/config.ts"], "/repo");
     assert.match(command, /stryker run --mutate/);
     assert.match(command, /1>&2/);
     assert.match(command, /cat reports\/mutation\/mutation\.json/);
   });
 
-  it("builds command-runner commands that emit the JSON report file to stdout", () => {
+  it("command-runner mode emits the report and defaults the dry-run timeout to 5", () => {
     const command = buildStrykerCommand(["src/config.ts"], "/repo", "npm test -- config");
     assert.match(command, /stryker run \.marmorkrebs-stryker\.json/);
     assert.match(command, /1>&2/);
     assert.match(command, /cat reports\/mutation\/mutation\.json/);
+    assert.ok(command.includes('"dryRunTimeoutMinutes":5'));
+  });
+
+  it("uses the configured dry-run timeout when provided", () => {
+    const command = buildStrykerCommand(["src/config.ts"], "/repo", "npm test", undefined, 12);
+    assert.ok(command.includes('"dryRunTimeoutMinutes":12'));
   });
 });
 

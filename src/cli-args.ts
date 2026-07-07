@@ -67,6 +67,7 @@ export function parseCliArgs(argv: string[]): {
   thresholdHigh?: number;
   thresholdLow?: number;
   thresholdBreak?: number;
+  strykerDryRunTimeoutMinutes?: number;
   maxMutants?: number;
   timeoutFactor?: number;
   timeoutConstantMs?: number;
@@ -198,6 +199,9 @@ export function parseCliArgs(argv: string[]): {
   if (xctestSkipTesting) result.xctestSkipTesting = xctestSkipTesting;
   if (args.timeout !== undefined) result.timeout = parseInt(args.timeout, 10);
   if (args.threshold !== undefined) result.threshold = parseFloat(args.threshold);
+  if (args["stryker-dry-run-timeout-minutes"] !== undefined) {
+    result.strykerDryRunTimeoutMinutes = parseFloat(args["stryker-dry-run-timeout-minutes"]);
+  }
   if (args["threshold-high"] !== undefined) {
     result.thresholdHigh = parseFloat(args["threshold-high"]);
   }

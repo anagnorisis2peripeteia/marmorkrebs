@@ -28,6 +28,7 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 | `--base <ref>` | derive changed files from the local diff vs `<ref>` |
 | `--scope-lines` | with `--base`: mutate only PR-touched LINE RANGES (stryker native; gomu/cargo-mutants parser-side; mutmut/go-mutesting degrade to file scope) |
 | `--exclude-mutations <a,b>` | stryker lane: drop documented low-signal mutators (e.g. `StringLiteral`) |
+| `--stryker-dry-run-timeout-minutes <n>` | StrykerJS lane: dry-run timeout for the initial unmutated run (default 5); raise it for slow test commands |
 | `--allow-empty` | let a zero-mutant result pass — required for docs/test/fixtures-only diffs, which otherwise ERROR (never excuses a tool failure) |
 | `--report-file <path>` | also write the MutationResult JSON artifact (written before exit-code evaluation, so failing gates keep their evidence) |
 | `--threshold <0-1>` | minimum score; exit 2 below it |
