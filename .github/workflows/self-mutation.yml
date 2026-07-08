@@ -1,0 +1,38 @@
+name: self-mutation
+
+# PR-scoped, report-only mutation testing of marmorkrebs' OWN code, using StrykerJS
+# + the TypeScript checker (see stryker.conf.json). It mutates only the source files
+# a PR changed and posts the mutation score + survivors to the job summary. It is a
+# SIGNAL, not a gate: it never fails the build on a low score (only on a StrykerJS
+# crash). To turn it into a gate later, set `thresholds.break` in stryker.conf.json.
+#
+# Full-repo baseline is deliberately NOT wired here yet: the `command` test runner
+# rebuilds+retests per mutant with no per-test coverage, so a whole-repo sweep is
+# hours long. That needs a per-test coverage runner integration first (follow-up).
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  self-mutation:
+    name: PR-scoped self-mutation (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the base ref to diff changed files
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - name: Self-mutation on changed files
+        # base_ref is the PR target branch; on manual dispatch fall back to the repo's own
+        # default branch (not a hardcoded name).
+        run: node scripts/self-mutation.mjs "origin/${{ github.base_ref || github.event.repository.default_branch }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: ignore
