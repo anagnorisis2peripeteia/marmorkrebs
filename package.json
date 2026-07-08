@@ -13,13 +13,16 @@
     "lint": "node scripts/lint.mjs",
     "validate:stryker-cxx-provider": "node scripts/validate-stryker-cxx-provider.mjs",
     "validate:provider": "node scripts/validate-provider.mjs",
-    "validate:providers": "node scripts/validate-provider.mjs --all"
+    "validate:providers": "node scripts/validate-provider.mjs --all",
+    "mutate:self": "node scripts/self-mutation.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^20.0.0"
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
   }
 }
