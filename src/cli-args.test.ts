@@ -35,6 +35,11 @@ describe("parseCliArgs", () => {
     assert.equal(o.timeout, 60000);
   });
 
+  it("parses --stryker-dry-run-timeout-minutes", () => {
+    const o = parseCliArgs(argv("--tool", "stryker", "--stryker-dry-run-timeout-minutes", "12"));
+    assert.equal(o.strykerDryRunTimeoutMinutes, 12);
+  });
+
   it("rejects a bad parity profile", () => {
     assert.throws(
       () => parseCliArgs(argv("--tool", "stryker-cxx", "--parity-profile", "bogus")),

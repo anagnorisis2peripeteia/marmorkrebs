@@ -62,6 +62,8 @@ export interface MutationConfig {
   thresholdLow?: number;
   thresholdBreak?: number;
   timeoutMs?: number;
+  /** StrykerJS dry-run timeout in minutes for the initial unmutated run (default: 5). */
+  strykerDryRunTimeoutMinutes?: number;
   /** Allow a zero-mutant result to pass (default: fail closed — see reconcileResult). */
   allowEmpty?: boolean;
   /** Mutator names excluded from scoring (stryker lane; e.g. StringLiteral). */

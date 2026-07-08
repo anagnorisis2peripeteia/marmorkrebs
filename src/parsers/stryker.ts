@@ -48,6 +48,12 @@ export function parseStryker(output: string): MutationResult {
           case "Ignored":
             ignored++;
             break;
+          case "CompileError":
+          case "RuntimeError":
+            // A mutant that fails to compile or crashes the runner means the run is
+            // unreliable; fail closed rather than silently dropping it (reconcileResult
+            // would otherwise trust the remaining partial score as a real verdict).
+            throw new Error(`Stryker reported mutant error status: ${mutant.status}`);
         }
       }
     }
@@ -80,6 +86,7 @@ export function buildStrykerCommand(
   workDir: string,
   testCommand?: string,
   excludeMutations?: string[],
+  dryRunTimeoutMinutes?: number,
 ): string {
   const wd = shellEscape(workDir);
   const mutateGlobs = sourceFiles.map((f) => `'${shellEscape(f)}'`).join(",");
@@ -113,12 +120,13 @@ export function buildStrykerCommand(
       reporters: ["json"],
       tsconfigFile: "marmorkrebs.notsconfig.json",
       tempDirName: ".stryker-tmp",
+      dryRunTimeoutMinutes: dryRunTimeoutMinutes ?? 5,
       ...(excludeMutations?.length ? { mutator: { excludedMutations: excludeMutations } } : {}),
     }).replace(/'/g, `'\\''`);
-    // cd + scrub the PRIOR report FIRST: the trailing `cat` runs on every exit path,
-    // so a stale report from an earlier run must be gone BEFORE anything can fail —
-    // otherwise a failed run emits stale-report+nonzero-exit, which reconcileResult
-    // trusts as a tool-threshold verdict (fail-open caught by the validator probe).
+    // cd + scrub the PRIOR report FIRST: the trailing `cat` runs on every exit path, so a
+    // stale report from an earlier run must be gone BEFORE anything can fail — otherwise a
+    // failed run emits stale-report+nonzero-exit, which reconcileResult trusts as a
+    // tool-threshold verdict (fail-open caught by the validator probe).
     return (
       `cd '${wd}' && rm -f reports/mutation/mutation.json && ${ensure} && { ${exclude}; } && ` +
       `printf '%s' '${cfg}' > .marmorkrebs-stryker.json && ` +

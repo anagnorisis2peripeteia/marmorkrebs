@@ -54,6 +54,8 @@ Options:
   --xctest-only-testing <t> stryker-cxx only: XCTest only-testing target(s), commaable
   --xctest-skip-testing <t> stryker-cxx only: XCTest skip-testing target(s), commaable
   --timeout <ms>            Mutation run timeout in ms (default: 480000)
+  --stryker-dry-run-timeout-minutes <n>
+                           StrykerJS only: dry-run timeout for the initial unmutated run (default: 5)
   --threshold <0-1>         Minimum mutation score to pass (default: none)
   --allow-empty             Let a zero-mutant result pass (default: a 0-mutant run is an error)
   --report-file <path>      Also write the MutationResult JSON to <path> (written before
@@ -253,6 +255,7 @@ function main(): void {
     base: opts.base,
     since: opts.since,
     timeoutMs: opts.timeout,
+    strykerDryRunTimeoutMinutes: opts.strykerDryRunTimeoutMinutes,
     threshold: opts.threshold,
     allowEmpty: opts.allowEmpty,
     excludeMutations: opts.excludeMutations,
