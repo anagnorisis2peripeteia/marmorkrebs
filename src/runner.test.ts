@@ -22,6 +22,42 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.equal(r.error, "Failed to parse");
   });
 
+  it("surfaces the tool's stderr when a parse error accompanies a crashed tool", () => {
+    const r = reconcileResult(
+      result({ error: "Failed to parse Stryker.NET output: No JSON output from Stryker.NET" }),
+      {
+        ...OK_EXEC,
+        exitCode: 134,
+        stderr: "Stryker.Abstractions.Exceptions.CompilationException: Internal error due to compile error.",
+      },
+      { tool: "stryker-net" } as MutationConfig,
+    );
+    assert.match(r.error ?? "", /No JSON output/); // parse symptom kept
+    assert.match(r.error ?? "", /CompilationException/); // real cause surfaced, not swallowed
+    assert.match(r.error ?? "", /exited 134/);
+  });
+
+  it("does not append tool output when a failed run has empty stderr (guard is failed AND toolErr)", () => {
+    const r = reconcileResult(
+      result({ error: "Failed to parse" }),
+      { ...OK_EXEC, exitCode: 1, stderr: "   " },
+      { tool: "gomu" } as MutationConfig,
+    );
+    assert.equal(r.error, "Failed to parse"); // nothing to surface -> parse error unchanged
+    assert.doesNotMatch(r.error ?? "", /tool exited/);
+  });
+
+  it("truncates a very long tool stderr to the tail", () => {
+    const long = "X".repeat(5000) + "REAL_CAUSE_AT_END";
+    const r = reconcileResult(
+      result({ error: "parse fail" }),
+      { ...OK_EXEC, exitCode: 1, stderr: long },
+      { tool: "gomu" } as MutationConfig,
+    );
+    assert.match(r.error ?? "", /REAL_CAUSE_AT_END/); // tail (with the real cause) kept
+    assert.ok((r.error ?? "").length < long.length); // and truncated, not the whole dump
+  });
+
   it("errors on spawn failure", () => {
     const r = reconcileResult(
       result({ totalMutants: 5, killed: 5, score: 1 }),
