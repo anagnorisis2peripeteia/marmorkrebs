@@ -61,7 +61,25 @@ export function reconcileResult(
   exec: ExecEvidence,
   config: MutationConfig,
 ): MutationResult {
-  if (parsed.error) return parsed;
+  if (parsed.error) {
+    // A parse error on a FAILED tool run is only the SYMPTOM (e.g. "no JSON output from Stryker.NET"
+    // because the tool crashed before writing a report). Surface the tool's own stderr so the real
+    // cause — a compile error, an unhandled exception — is visible, instead of hiding it behind the
+    // parse symptom. (P0 diagnosability: this masked a Stryker.NET CompilationException on
+    // DS4Windows — CsWin32 source-generated symbols vanish under Stryker's mutant recompile — and
+    // reported only "No JSON output" for hours.)
+    const failed = Boolean(exec.spawnError) || Boolean(exec.signal) || exec.exitCode !== 0;
+    const toolErr = exec.stderr.trim();
+    if (failed && toolErr) {
+      return {
+        ...parsed,
+        error:
+          `${parsed.error}\n--- tool exited ${exec.exitCode}` +
+          `${exec.signal ? ` (signal ${exec.signal})` : ""}; tool stderr (tail) ---\n${toolErr.slice(-2000)}`,
+      };
+    }
+    return parsed;
+  }
   const stderrTail = exec.stderr.trim().slice(-300);
   if (exec.spawnError) {
     return { ...parsed, error: `tool process failed to spawn: ${exec.spawnError}` };
