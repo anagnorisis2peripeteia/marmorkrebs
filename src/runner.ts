@@ -284,6 +284,9 @@ function runLocally(
   startMs: number,
 ): MutationResult {
   const command = buildCommand(config, sourceFiles, repoDir);
+  console.error(
+    `[marmorkrebs] ${config.tool}: ${sourceFiles.length} source file(s) in scope; running: ${redactSecrets(command)}`,
+  );
 
   const result = spawnSync("bash", ["-c", command], {
     cwd: repoDir,
@@ -390,13 +393,28 @@ function parseOutput(
   }
 }
 
-function filterSourceFiles(files: string[], tool: MutationTool): string[] {
+// Mask auth-like values before logging a command line — a user-supplied --test-command /
+// --build-command can carry inline tokens, and the command log must not leak them to CI output.
+// Keyword-targeted (low false-positive): only redacts values attached to secret-ish keys.
+export function redactSecrets(command: string): string {
+  return command
+    .replace(
+      /(--?(?:token|password|passwd|secret|api[-_]?key|access[-_]?key|auth[-_]?token|pat)[=:\s]+)("[^"]*"|'[^']*'|\S+)/gi,
+      "$1***",
+    )
+    .replace(/(Authorization:\s*Bearer\s+)[^\s'"]+/gi, "$1***")
+    .replace(/([?&](?:token|key|password|secret|sig)=)[^&\s'"]+/gi, "$1***");
+}
+
+export function filterSourceFiles(files: string[], tool: MutationTool): string[] {
   const extensions = sourceExtensions(tool);
   return files.filter((file) => {
-    // Strip a trailing line-range (e.g. "index.ts:1-388" / "index.ts:42") before the extension
-    // check so focused mutation on PR-touched lines passes the filter.
-    const lower = file.toLowerCase().replace(/:\d+(?:-\d+)?$/, "");
-    if (isTestFile(lower)) return false;
+    // Strip a trailing line-range (e.g. "index.ts:1-388" / "index.ts:42") before the checks so
+    // focused mutation on PR-touched lines passes the filter. Pass the ORIGINAL case to isTestFile
+    // so it can use CamelCase (capital-T) detection for *Tests/ dirs and *Tests.cs files.
+    const stripped = file.replace(/:\d+(?:-\d+)?$/, "");
+    const lower = stripped.toLowerCase();
+    if (isTestFile(stripped)) return false;
     return extensions.some((ext) => lower.endsWith(ext));
   });
 }
@@ -423,15 +441,27 @@ function sourceExtensions(tool: MutationTool): string[] {
 }
 
 function isTestFile(file: string): boolean {
-  return (
-    file.includes("/fixtures/") ||
-    file.startsWith("fixtures/") ||
-    file.includes("_test.") ||
-    file.includes(".test.") ||
-    file.includes(".spec.") ||
-    file.includes("/test/") ||
-    file.includes("/tests/") ||
-    file.includes("/__tests__/") ||
-    file.endsWith("_test.go")
-  );
+  const lower = file.toLowerCase();
+  if (
+    lower.includes("/fixtures/") ||
+    lower.startsWith("fixtures/") ||
+    lower.includes("_test.") ||
+    lower.includes(".test.") ||
+    lower.includes(".spec.") ||
+    lower.includes("/test/") ||
+    lower.includes("/tests/") ||
+    lower.includes("/__tests__/") ||
+    lower.endsWith("_test.go")
+  ) {
+    return true;
+  }
+  // CamelCase test conventions common in .NET (and elsewhere): a *Tests/ or *Test/ project dir
+  // (e.g. DS4WindowsTests/, Foo.Tests/), or a *Tests.cs / *Test.cs source file (WidgetTest.cs).
+  // Matched CASE-SENSITIVELY (require a capital T) so "latest.cs" / "greatest/…" / "Contest.cs"
+  // are NOT misread as tests — a false positive here silently drops real source from mutation.
+  if (/(?:^|\/)[A-Za-z0-9_.]*Tests?\//.test(file)) return true;
+  // Allow the *Tests/*Test token to be preceded by start, "/", or "." so dotted basenames like
+  // Foo.Tests.cs and Foo.BarTests.cs are caught, not just CamelCase WidgetTest.cs.
+  if (/(?:^|[/.])[A-Za-z0-9_]*Tests?\.(?:cs|fs|vb)$/.test(file)) return true;
+  return false;
 }
