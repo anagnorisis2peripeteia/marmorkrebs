@@ -25,7 +25,15 @@ export function getChangedFilesFromGit(dir: string, base: string): string[] {
   const untracked = lines(git(dir, ["ls-files", "--others", "--exclude-standard"]));
 
   const all = new Set([...fromBranch, ...fromWorkingTree, ...untracked]);
-  return [...all].filter((file) => existsSync(join(dir, file))).sort();
+  const files = [...all].filter((file) => existsSync(join(dir, file))).sort();
+  // Breakdown makes a surprising set traceable: a large count from working-tree/untracked (a dirty
+  // checkout, CRLF churn, or stray build artifacts) vs from-branch points straight at the cause,
+  // instead of the gate silently mutating the whole repo.
+  console.error(
+    `[marmorkrebs] changed files vs ${base}: ${files.length} total ` +
+      `(${fromBranch.length} branch, ${fromWorkingTree.length} working-tree, ${untracked.length} untracked)`,
+  );
+  return files;
 }
 
 /**
