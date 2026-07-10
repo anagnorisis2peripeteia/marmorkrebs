@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import {
   crabboxCleanup,
   crabboxExec,
@@ -26,6 +26,7 @@ import {
 } from "./parsers/index.js";
 import {
   EMPTY_RESULT,
+  mutationScore,
   type CrabboxLease,
   type MutationConfig,
   type MutationResult,
@@ -232,6 +233,10 @@ function runOnExistingLease(
       crabboxSync(leaseId, repoDir, remoteDir);
     }
 
+    if (config.tool === "stryker-net") {
+      return runStrykerNetInProjectGroups(remoteDir, sourceFiles, config, startMs);
+    }
+
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(leaseId, command, timeoutMs);
@@ -264,6 +269,10 @@ function runInCrabbox(
     lease = crabboxProvision(config.crabbox!);
     const remoteDir = "/tmp/mutation-target";
     crabboxSync(lease.id, repoDir, remoteDir);
+
+    if (config.tool === "stryker-net") {
+      return runStrykerNetInProjectGroups(remoteDir, sourceFiles, config, startMs);
+    }
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -301,6 +310,10 @@ function runLocally(
   config: MutationConfig,
   startMs: number,
 ): MutationResult {
+  if (config.tool === "stryker-net") {
+    return runStrykerNetInProjectGroups(repoDir, sourceFiles, config, startMs);
+  }
+
   const command = buildCommand(config, sourceFiles, repoDir);
   console.error(
     `[marmorkrebs] ${config.tool}: ${sourceFiles.length} source file(s) in scope; running: ${redactSecrets(command)}`,
@@ -347,6 +360,139 @@ function runLocally(
       elapsedMs: Date.now() - startMs,
     };
   }
+}
+
+function runStrykerNetInProjectGroups(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  startMs: number,
+): MutationResult {
+  const groups = groupStrykerNetSourceFilesByProject(repoDir, sourceFiles);
+  if (!groups.length) {
+    return {
+      ...EMPTY_RESULT,
+      tool: "stryker-net",
+      error: "could not resolve any .csproj for the changed C# files; run from explicit --project/project file",
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
+  let merged: MutationResult = {
+    ...EMPTY_RESULT,
+    tool: "stryker-net",
+    survivingMutants: [],
+    elapsedMs: 0,
+    error: null,
+  };
+  const failures: string[] = [];
+
+  for (const { projectDir, files: scopedFiles } of groups) {
+    if (!scopedFiles.length) continue;
+
+    const displayDir = projectDir === repoDir ? "<repo-root>" : relative(repoDir, projectDir);
+    const command = buildStrykerNetCommand(scopedFiles, projectDir);
+    const result = spawnSync("bash", ["-c", command], {
+      cwd: repoDir,
+      encoding: "utf8" as const,
+      timeout: timeoutMs,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const parsed = parseOutput(config, result.stdout ?? "", result.stderr ?? "", scopedFiles);
+    const reconciled = reconcileResult(
+      parsed,
+      {
+        exitCode: result.status ?? 1,
+        signal: result.signal ?? null,
+        spawnError: result.error ? String(result.error) : null,
+        stderr: result.stderr ?? "",
+      },
+      config,
+    );
+
+    console.error(
+      `[marmorkrebs] ${config.tool}: ${scopedFiles.length} source file(s) in scope for ${displayDir}; running: ${redactSecrets(
+        command,
+      )}`,
+    );
+
+    if (reconciled.error) {
+      failures.push(`${displayDir || projectDir}: ${reconciled.error}`);
+      continue;
+    }
+
+    merged.totalMutants += reconciled.totalMutants;
+    merged.killed += reconciled.killed;
+    merged.survived += reconciled.survived;
+    merged.timeout += reconciled.timeout;
+    merged.noCoverage += reconciled.noCoverage;
+    merged.ignored += reconciled.ignored;
+    merged.survivingMutants.push(...reconciled.survivingMutants);
+    merged.error = null;
+  }
+
+  if (failures.length) {
+    return {
+      ...merged,
+      tool: "stryker-net",
+      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  merged.score = mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage);
+  merged.elapsedMs = Date.now() - startMs;
+  return merged;
+}
+
+function groupStrykerNetSourceFilesByProject(
+  repoDir: string,
+  sourceFiles: string[],
+): { projectDir: string; files: string[] }[] {
+  const repoRoot = resolve(repoDir);
+  const bucketed = new Map<string, string[]>();
+
+  for (const sourceFile of sourceFiles) {
+    const abs = resolve(repoRoot, sourceFile);
+    const projectDir = findNearestCsProjDir(repoRoot, abs) ?? repoRoot;
+    const scoped = relative(projectDir, abs).replace(/\\/g, "/");
+    const finalScoped = scoped.startsWith("..") ? sourceFile : scoped;
+    const bucket = bucketed.get(projectDir);
+    if (bucket) {
+      bucket.push(finalScoped);
+    } else {
+      bucketed.set(projectDir, [finalScoped]);
+    }
+  }
+
+  return [...bucketed.entries()].map(([projectDir, files]) => ({
+    projectDir,
+    files,
+  }));
+}
+
+function findNearestCsProjDir(repoRoot: string, filePath: string): string | null {
+  const root = resolve(repoRoot);
+  let current = dirname(resolve(filePath));
+  while (current.startsWith(root)) {
+    if (findCsProjInDir(current)) return current;
+    const next = dirname(current);
+    if (next === current) {
+      break;
+    }
+    current = next;
+  }
+  return null;
+}
+
+function findCsProjInDir(dir: string): string | null {
+  if (!existsSync(dir)) return null;
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith(".csproj")) return entry.name;
+  }
+  return null;
 }
 
 function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: string): string {
