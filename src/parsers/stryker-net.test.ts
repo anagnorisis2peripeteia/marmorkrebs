@@ -48,6 +48,7 @@ describe("parseStrykerNet", () => {
   it("returns error for non-JSON output (e.g. MSBuild failure)", () => {
     const result = parseStrykerNet("error MSB1009: Project file does not exist.");
     assert.notEqual(result.error, null);
+    assert.equal(result.score, 0);
     assert.equal(result.tool, "stryker-net");
   });
 

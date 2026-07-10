@@ -59,6 +59,7 @@ export function parseStrykerNet(output: string): MutationResult {
     return {
       ...EMPTY_RESULT,
       tool: "stryker-net",
+      score: 0,
       error: `Failed to parse Stryker.NET output: ${error instanceof Error ? error.message : String(error)}`,
     };
   }

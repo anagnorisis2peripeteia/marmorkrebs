@@ -37,6 +37,20 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.match(r.error ?? "", /exited 134/);
   });
 
+  it("surfaces spawn errors when a parse failure has no stderr output", () => {
+    const r = reconcileResult(
+      result({ error: "Failed to parse Stryker.NET output: No JSON output from Stryker.NET" }),
+      {
+        ...OK_EXEC,
+        exitCode: 127,
+        spawnError: "sh: 1: bash: not found",
+      },
+      { tool: "stryker-net" } as MutationConfig,
+    );
+    assert.match(r.error ?? "", /No JSON output/);
+    assert.match(r.error ?? "", /bash: not found/);
+  });
+
   it("does not append tool output when a failed run has empty stderr (guard is failed AND toolErr)", () => {
     const r = reconcileResult(
       result({ error: "Failed to parse" }),

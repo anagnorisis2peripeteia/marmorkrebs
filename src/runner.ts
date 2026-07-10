@@ -71,12 +71,16 @@ export function reconcileResult(
     // reported only "No JSON output" for hours.)
     const failed = Boolean(exec.spawnError) || Boolean(exec.signal) || exec.exitCode !== 0;
     const toolErr = exec.stderr.trim();
-    if (failed && toolErr) {
+    if (failed && (toolErr || exec.spawnError)) {
+      const spawnError = exec.spawnError
+        ? `tool process failed to spawn: ${exec.spawnError}`
+        : `tool exited ${exec.exitCode}`;
+      const signalInfo = exec.signal ? `signal ${exec.signal}` : null;
+      const details = [spawnError, signalInfo].filter(Boolean).join("; ");
+      const tail = toolErr ? `\n--- tool stderr (tail) ---\n${toolErr.slice(-2000)}` : "";
       return {
         ...parsed,
-        error:
-          `${parsed.error}\n--- tool exited ${exec.exitCode}` +
-          `${exec.signal ? ` (signal ${exec.signal})` : ""}; tool stderr (tail) ---\n${toolErr.slice(-2000)}`,
+        error: `${parsed.error}\n${details}${tail}`,
       };
     }
     return parsed;
