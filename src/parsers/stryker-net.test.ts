@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { buildStrykerNetCommand, parseStrykerNet } from "./stryker-net.js";
 
 describe("parseStrykerNet", () => {
@@ -69,12 +71,14 @@ describe("mutate glob anchoring and vacuous-ignore guard", () => {
   });
 
   it("passes --test-project when a sibling test csproj was discovered (issue #14)", () => {
-    const cmd = buildStrykerNetCommand(["Calc.cs"], "/repo/Lib", "../Lib.Tests/Lib.Tests.csproj");
+    const workDir = join(tmpdir(), "repo", "Lib");
+    const testProject = ["..", "Lib.Tests", "Lib.Tests.csproj"].join("/");
+    const cmd = buildStrykerNetCommand(["Calc.cs"], workDir, testProject);
     assert.ok(cmd.includes("--test-project '../Lib.Tests/Lib.Tests.csproj'"));
   });
 
   it("omits --test-project for single-project repos", () => {
-    const cmd = buildStrykerNetCommand(["Calc.cs"], "/repo");
+    const cmd = buildStrykerNetCommand(["Calc.cs"], join(tmpdir(), "repo"));
     assert.ok(!cmd.includes("--test-project"));
   });
 
