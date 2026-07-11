@@ -440,6 +440,10 @@ function runStrykerNetInProjectGroups(
     return {
       ...merged,
       tool: "stryker-net",
+      // A failed run must never present a passing score (issue #15: the failure
+      // payload reported score 1 with totalMutants 0, readable as a perfect run
+      // by anything that skips the exit code / error field).
+      score: 0,
       error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
       elapsedMs: Date.now() - startMs,
     };
