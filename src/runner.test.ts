@@ -430,6 +430,8 @@ describe("findStrykerNetTestProject (issue #14: multi-project repos)", () => {
         join(repo, "AppTests", "AppTests.csproj"),
         '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>' +
           '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />' +
+          // backslash separators are DELIBERATE: real csproj content is Windows-style,
+          // and this asserts the discovery normalizes them on every platform
           '<ProjectReference Include="..\\App\\App.csproj" />' +
           "</ItemGroup></Project>",
       );

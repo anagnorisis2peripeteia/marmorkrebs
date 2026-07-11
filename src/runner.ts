@@ -82,7 +82,7 @@ export function reconcileResult(
       const tail = toolErr ? `\n--- tool stderr (tail) ---\n${toolErr.slice(-2000)}` : "";
       return {
         ...parsed,
-        error: `${parsed.error}\n${details}${tail}`,
+        error: `${parsed.error ?? "tool run failed"}\n${details}${tail}`,
       };
     }
     return parsed;
@@ -439,7 +439,14 @@ function runStrykerNetInProjectGroups(
     merged.timeout += reconciled.timeout;
     merged.noCoverage += reconciled.noCoverage;
     merged.ignored += reconciled.ignored;
-    merged.survivingMutants.push(...reconciled.survivingMutants);
+    merged.survivingMutants.push(
+      ...reconciled.survivingMutants.map((m) => ({
+        ...m,
+        // survivors from a grouped run carry project-relative paths; re-anchor them
+        // to the repo root so multi-project reports stay unambiguous
+        file: displayDir === "<repo-root>" ? m.file : `${displayDir}/${m.file}`.replace(/\\/g, "/"),
+      })),
+    );
     merged.error = null;
   }
 
