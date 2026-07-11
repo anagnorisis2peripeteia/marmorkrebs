@@ -71,12 +71,14 @@ export function reconcileResult(
     // reported only "No JSON output" for hours.)
     const failed = Boolean(exec.spawnError) || Boolean(exec.signal) || exec.exitCode !== 0;
     const toolErr = exec.stderr.trim();
-    if (failed && (toolErr || exec.spawnError)) {
+    if (failed) {
       const spawnError = exec.spawnError
         ? `tool process failed to spawn: ${exec.spawnError}`
         : `tool exited ${exec.exitCode}`;
       const signalInfo = exec.signal ? `signal ${exec.signal}` : null;
       const details = [spawnError, signalInfo].filter(Boolean).join("; ");
+      // Append the exit detail even when stderr is empty — a silent tool death
+      // must still carry its exit code in the surfaced error.
       const tail = toolErr ? `\n--- tool stderr (tail) ---\n${toolErr.slice(-2000)}` : "";
       return {
         ...parsed,
