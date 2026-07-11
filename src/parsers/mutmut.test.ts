@@ -10,6 +10,11 @@ const REAL_OUTPUT = `    calclib.tested.x_add__mutmut_1: killed
     calclib.slow.x_g__mutmut_1: timeout
 `;
 
+// Captured from a REAL mutmut 3.6.0 `results --all true` run against
+// agent-skills/plugins/issue-loop/scripts/issue_loop.py (2026-07-13 gate repro).
+const HYPHENATED_PATH_OUTPUT =
+  "    plugins.issue-loop.scripts.issue_loop.x_utcnow__mutmut_1: survived\n";
+
 describe("parseMutmut (mutmut 3 results lines)", () => {
   it("maps module paths to files and scopes to changed files", () => {
     const r = parseMutmut(REAL_OUTPUT, ["calclib/tested.py", "calclib/untested.py"]);
@@ -27,6 +32,14 @@ describe("parseMutmut (mutmut 3 results lines)", () => {
     const r = parseMutmut(REAL_OUTPUT, ["calclib/flaky.py"]);
     assert.equal(r.survived, 1);
     assert.equal(r.survivingMutants[0].status, "survived");
+  });
+
+  it("accepts hyphenated module paths and maps them back to changed files", () => {
+    const r = parseMutmut(HYPHENATED_PATH_OUTPUT, ["plugins/issue-loop/scripts/issue_loop.py"]);
+    assert.equal(r.error, null);
+    assert.equal(r.totalMutants, 1);
+    assert.equal(r.survived, 1);
+    assert.equal(r.survivingMutants[0].file, "plugins/issue-loop/scripts/issue_loop.py");
   });
 
   it("errors when no result lines match the changed files", () => {

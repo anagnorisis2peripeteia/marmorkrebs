@@ -10,7 +10,7 @@ import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore 
 // segfault / not checked. The module path maps back to a file (dots -> slashes + .py).
 // mutmut mutates everything under source_paths, so parseMutmut filters mutants down to
 // the changed files and recomputes counts from the filtered lines.
-const STATUS_LINE = /^\s+([\w.]+)\.x_(\w+?)__mutmut_(\d+): (.+)$/;
+const STATUS_LINE = /^\s+([\w.-]+)\.x_(\w+?)__mutmut_(\d+): (.+)$/;
 
 function moduleToFile(modulePath: string): string {
   return `${modulePath.replace(/\./g, "/")}.py`;
