@@ -59,6 +59,7 @@ export function parseStrykerNet(output: string): MutationResult {
     return {
       ...EMPTY_RESULT,
       tool: "stryker-net",
+      score: 0,
       error: `Failed to parse Stryker.NET output: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
@@ -90,7 +91,11 @@ export function parseStrykerNet(output: string): MutationResult {
   };
 }
 
-export function buildStrykerNetCommand(sourceFiles: string[], workDir: string): string {
+export function buildStrykerNetCommand(
+  sourceFiles: string[],
+  workDir: string,
+  testProject?: string,
+): string {
   // Stryker.NET takes one or more `--mutate` glob patterns; repo-relative file paths work
   // as degenerate globs. The json reporter writes the report to a file under the output
   // folder, so run quietly and cat that report to stdout for parseStrykerNet (clean JSON).
@@ -105,13 +110,19 @@ export function buildStrykerNetCommand(sourceFiles: string[], workDir: string): 
     .map((f) => `--mutate '${shellEscape(f.startsWith("**/") ? f : `**/${f}`)}'`)
     .join(" ");
   const escWork = shellEscape(workDir);
+  // Multi-project repos (app + separate test csproj): running from the source-project
+  // dir alone makes Stryker.NET treat the cwd project as its "test project" candidate
+  // and abort with "can't be mutated because no test project references it"
+  // (issue #14, live-fired on DS4Windows 2026-07-11). When the caller discovered the
+  // referencing test project, hand it over explicitly.
+  const testProjectArg = testProject ? ` --test-project '${shellEscape(testProject)}'` : "";
   // Scrub-FIRST (a crashed prior run's leftover report must never be cat'd by a
   // failed run — same stale-report class as the stryker lane), preserve the
   // runner's exit code through the cat (PR #1's lesson), and clean the output
   // dirs once the report is on stdout (validator artifact-hygiene catch).
   return (
     `cd '${escWork}' && rm -rf .marmorkrebs-stryker StrykerOutput && ` +
-    `dotnet stryker ${mutateArgs} --reporter json --output .marmorkrebs-stryker 1>&2; code=$?; ` +
+    `dotnet stryker ${mutateArgs}${testProjectArg} --reporter json --output .marmorkrebs-stryker 1>&2; code=$?; ` +
     `cat "$(find .marmorkrebs-stryker StrykerOutput -name mutation-report.json -path '*reports*' 2>/dev/null | sort | tail -1)" 2>/dev/null; ` +
     `rm -rf .marmorkrebs-stryker StrykerOutput; exit $code`
   );

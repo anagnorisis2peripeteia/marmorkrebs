@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import {
   crabboxCleanup,
   crabboxExec,
@@ -26,6 +26,7 @@ import {
 } from "./parsers/index.js";
 import {
   EMPTY_RESULT,
+  mutationScore,
   type CrabboxLease,
   type MutationConfig,
   type MutationResult,
@@ -70,12 +71,18 @@ export function reconcileResult(
     // reported only "No JSON output" for hours.)
     const failed = Boolean(exec.spawnError) || Boolean(exec.signal) || exec.exitCode !== 0;
     const toolErr = exec.stderr.trim();
-    if (failed && toolErr) {
+    if (failed) {
+      const spawnError = exec.spawnError
+        ? `tool process failed to spawn: ${exec.spawnError}`
+        : `tool exited ${exec.exitCode}`;
+      const signalInfo = exec.signal ? `signal ${exec.signal}` : null;
+      const details = [spawnError, signalInfo].filter(Boolean).join("; ");
+      // Append the exit detail even when stderr is empty — a silent tool death
+      // must still carry its exit code in the surfaced error.
+      const tail = toolErr ? `\n--- tool stderr (tail) ---\n${toolErr.slice(-2000)}` : "";
       return {
         ...parsed,
-        error:
-          `${parsed.error}\n--- tool exited ${exec.exitCode}` +
-          `${exec.signal ? ` (signal ${exec.signal})` : ""}; tool stderr (tail) ---\n${toolErr.slice(-2000)}`,
+        error: `${parsed.error ?? "tool run failed"}\n${details}${tail}`,
       };
     }
     return parsed;
@@ -232,6 +239,12 @@ function runOnExistingLease(
       crabboxSync(leaseId, repoDir, remoteDir);
     }
 
+    // stryker-net project grouping + test-project discovery are HOST-lane only:
+    // the grouping walks the local filesystem and spawns bash locally, which under
+    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
+    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
+    // command path; multi-project crabbox support is tracked in issue #17.
+
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
     const result = crabboxExec(leaseId, command, timeoutMs);
@@ -264,6 +277,12 @@ function runInCrabbox(
     lease = crabboxProvision(config.crabbox!);
     const remoteDir = "/tmp/mutation-target";
     crabboxSync(lease.id, repoDir, remoteDir);
+
+    // stryker-net project grouping + test-project discovery are HOST-lane only:
+    // the grouping walks the local filesystem and spawns bash locally, which under
+    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
+    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
+    // command path; multi-project crabbox support is tracked in issue #17.
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -301,6 +320,10 @@ function runLocally(
   config: MutationConfig,
   startMs: number,
 ): MutationResult {
+  if (config.tool === "stryker-net") {
+    return runStrykerNetInProjectGroups(repoDir, sourceFiles, config, startMs);
+  }
+
   const command = buildCommand(config, sourceFiles, repoDir);
   console.error(
     `[marmorkrebs] ${config.tool}: ${sourceFiles.length} source file(s) in scope; running: ${redactSecrets(command)}`,
@@ -347,6 +370,208 @@ function runLocally(
       elapsedMs: Date.now() - startMs,
     };
   }
+}
+
+function runStrykerNetInProjectGroups(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  startMs: number,
+): MutationResult {
+  const groups = groupStrykerNetSourceFilesByProject(repoDir, sourceFiles);
+  if (!groups.length) {
+    return {
+      ...EMPTY_RESULT,
+      tool: "stryker-net",
+      score: 0, // a failed resolution must never present EMPTY_RESULT's passing score (issue #15 class)
+      error: "could not resolve any .csproj for the changed C# files; run from explicit --project/project file",
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
+  let merged: MutationResult = {
+    ...EMPTY_RESULT,
+    tool: "stryker-net",
+    survivingMutants: [],
+    elapsedMs: 0,
+    error: null,
+  };
+  const failures: string[] = [];
+
+  for (const { projectDir, files: scopedFiles, testProject } of groups) {
+    if (!scopedFiles.length) continue;
+
+    const displayDir = projectDir === repoDir ? "<repo-root>" : relative(repoDir, projectDir);
+    const command = buildStrykerNetCommand(scopedFiles, projectDir, testProject);
+    const result = spawnSync("bash", ["-c", command], {
+      cwd: repoDir,
+      encoding: "utf8" as const,
+      timeout: timeoutMs,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const parsed = parseOutput(config, result.stdout ?? "", result.stderr ?? "", scopedFiles);
+    const reconciled = reconcileResult(
+      parsed,
+      {
+        exitCode: result.status ?? 1,
+        signal: result.signal ?? null,
+        spawnError: result.error ? String(result.error) : null,
+        stderr: result.stderr ?? "",
+      },
+      config,
+    );
+
+    console.error(
+      `[marmorkrebs] ${config.tool}: ${scopedFiles.length} source file(s) in scope for ${displayDir}; running: ${redactSecrets(
+        command,
+      )}`,
+    );
+
+    if (reconciled.error) {
+      failures.push(`${displayDir || projectDir}: ${reconciled.error}`);
+      continue;
+    }
+
+    merged.totalMutants += reconciled.totalMutants;
+    merged.killed += reconciled.killed;
+    merged.survived += reconciled.survived;
+    merged.timeout += reconciled.timeout;
+    merged.noCoverage += reconciled.noCoverage;
+    merged.ignored += reconciled.ignored;
+    merged.survivingMutants.push(
+      ...reconciled.survivingMutants.map((m) => ({
+        ...m,
+        // survivors from a grouped run carry project-relative paths; re-anchor them
+        // to the repo root so multi-project reports stay unambiguous
+        file: displayDir === "<repo-root>" ? m.file : `${displayDir}/${m.file}`.replace(/\\/g, "/"),
+      })),
+    );
+    merged.error = null;
+  }
+
+  if (failures.length) {
+    return {
+      ...merged,
+      tool: "stryker-net",
+      // A failed run must never present a passing score (issue #15: the failure
+      // payload reported score 1 with totalMutants 0, readable as a perfect run
+      // by anything that skips the exit code / error field).
+      score: 0,
+      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  merged.score = mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage);
+  merged.elapsedMs = Date.now() - startMs;
+  return merged;
+}
+
+function groupStrykerNetSourceFilesByProject(
+  repoDir: string,
+  sourceFiles: string[],
+): { projectDir: string; files: string[]; testProject?: string }[] {
+  const repoRoot = resolve(repoDir);
+  const bucketed = new Map<string, string[]>();
+
+  for (const sourceFile of sourceFiles) {
+    const abs = resolve(repoRoot, sourceFile);
+    const projectDir = findNearestCsProjDir(repoRoot, abs) ?? repoRoot;
+    const scoped = relative(projectDir, abs).replace(/\\/g, "/");
+    const finalScoped = scoped.startsWith("..") ? sourceFile : scoped;
+    const bucket = bucketed.get(projectDir);
+    if (bucket) {
+      bucket.push(finalScoped);
+    } else {
+      bucketed.set(projectDir, [finalScoped]);
+    }
+  }
+
+  return [...bucketed.entries()].map(([projectDir, files]) => {
+    const testProject = findStrykerNetTestProject(repoRoot, projectDir);
+    return testProject ? { projectDir, files, testProject } : { projectDir, files };
+  });
+}
+
+// Multi-project repos keep tests in a sibling csproj; running Stryker.NET from the
+// source-project dir without pointing at it aborts with "can't be mutated because no
+// test project references it" (issue #14). Find a test csproj that (a) looks like a
+// test project (Microsoft.NET.Test.Sdk / IsTestProject / *Test(s) name) and
+// (b) ProjectReferences a csproj inside the group's project dir; return it relative
+// to the project dir for --test-project. Single-project repos return undefined and
+// keep the old invocation.
+export function findStrykerNetTestProject(repoRoot: string, projectDir: string): string | undefined {
+  const projectCsprojs = new Set<string>();
+  for (const entry of readdirSync(projectDir, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".csproj")) {
+      projectCsprojs.add(resolve(projectDir, entry.name));
+    }
+  }
+  if (!projectCsprojs.size) return undefined;
+
+  for (const candidate of walkCsProjFiles(resolve(repoRoot))) {
+    const candidateDir = dirname(candidate);
+    if (candidateDir === resolve(projectDir)) continue;
+    let content: string;
+    try {
+      content = readFileSync(candidate, "utf8");
+    } catch {
+      continue;
+    }
+    const looksLikeTests =
+      /Microsoft\.NET\.Test\.Sdk|<IsTestProject>\s*true/i.test(content) ||
+      /tests?\.csproj$/i.test(candidate);
+    if (!looksLikeTests) continue;
+    for (const match of content.matchAll(/<ProjectReference\s+Include\s*=\s*"([^"]+)"/gi)) {
+      const referenced = resolve(candidateDir, match[1].replace(/\\/g, "/"));
+      if (projectCsprojs.has(referenced)) {
+        return relative(projectDir, candidate).replace(/\\/g, "/");
+      }
+    }
+  }
+  return undefined;
+}
+
+function* walkCsProjFiles(root: string, depth = 0): Generator<string> {
+  if (depth > 6) return;
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (/^(\.git|node_modules|bin|obj|packages)$/i.test(entry.name)) continue;
+      yield* walkCsProjFiles(join(root, entry.name), depth + 1);
+    } else if (entry.isFile() && entry.name.endsWith(".csproj")) {
+      yield join(root, entry.name);
+    }
+  }
+}
+
+function findNearestCsProjDir(repoRoot: string, filePath: string): string | null {
+  const root = resolve(repoRoot);
+  let current = dirname(resolve(filePath));
+  while (current.startsWith(root)) {
+    if (findCsProjInDir(current)) return current;
+    const next = dirname(current);
+    if (next === current) {
+      break;
+    }
+    current = next;
+  }
+  return null;
+}
+
+function findCsProjInDir(dir: string): string | null {
+  if (!existsSync(dir)) return null;
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith(".csproj")) return entry.name;
+  }
+  return null;
 }
 
 function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: string): string {

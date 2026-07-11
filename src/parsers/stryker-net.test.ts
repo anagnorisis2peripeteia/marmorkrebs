@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { buildStrykerNetCommand, parseStrykerNet } from "./stryker-net.js";
 
 describe("parseStrykerNet", () => {
@@ -48,6 +50,7 @@ describe("parseStrykerNet", () => {
   it("returns error for non-JSON output (e.g. MSBuild failure)", () => {
     const result = parseStrykerNet("error MSB1009: Project file does not exist.");
     assert.notEqual(result.error, null);
+    assert.equal(result.score, 0);
     assert.equal(result.tool, "stryker-net");
   });
 
@@ -65,6 +68,18 @@ describe("mutate glob anchoring and vacuous-ignore guard", () => {
     assert.ok(cmd.includes("--mutate '**/Lib/Calc.cs'"));
     assert.ok(cmd.includes("--mutate '**/Other.cs'"));
     assert.ok(!cmd.includes("5-9"));
+  });
+
+  it("passes --test-project when a sibling test csproj was discovered (issue #14)", () => {
+    const workDir = join(tmpdir(), "repo", "Lib");
+    const testProject = ["..", "Lib.Tests", "Lib.Tests.csproj"].join("/");
+    const cmd = buildStrykerNetCommand(["Calc.cs"], workDir, testProject);
+    assert.ok(cmd.includes("--test-project '../Lib.Tests/Lib.Tests.csproj'"));
+  });
+
+  it("omits --test-project for single-project repos", () => {
+    const cmd = buildStrykerNetCommand(["Calc.cs"], join(tmpdir(), "repo"));
+    assert.ok(!cmd.includes("--test-project"));
   });
 
   it("errors when every mutant is Ignored (filter matched nothing)", () => {

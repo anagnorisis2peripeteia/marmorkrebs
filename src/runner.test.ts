@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reconcileResult, runMutationAnalysis } from "./runner.js";
+import { findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
 import { EMPTY_RESULT, type MutationConfig, type MutationResult } from "./types.js";
 
 function result(overrides: Partial<MutationResult>): MutationResult {
@@ -37,14 +37,29 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.match(r.error ?? "", /exited 134/);
   });
 
-  it("does not append tool output when a failed run has empty stderr (guard is failed AND toolErr)", () => {
+  it("surfaces spawn errors when a parse failure has no stderr output", () => {
+    const r = reconcileResult(
+      result({ error: "Failed to parse Stryker.NET output: No JSON output from Stryker.NET" }),
+      {
+        ...OK_EXEC,
+        exitCode: 127,
+        spawnError: "sh: 1: bash: not found",
+      },
+      { tool: "stryker-net" } as MutationConfig,
+    );
+    assert.match(r.error ?? "", /No JSON output/);
+    assert.match(r.error ?? "", /bash: not found/);
+  });
+
+  it("appends the exit code even when a failed run has empty stderr (silent death still carries its code)", () => {
     const r = reconcileResult(
       result({ error: "Failed to parse" }),
       { ...OK_EXEC, exitCode: 1, stderr: "   " },
       { tool: "gomu" } as MutationConfig,
     );
-    assert.equal(r.error, "Failed to parse"); // nothing to surface -> parse error unchanged
-    assert.doesNotMatch(r.error ?? "", /tool exited/);
+    assert.match(r.error ?? "", /Failed to parse/);
+    assert.match(r.error ?? "", /tool exited 1/);
+    assert.doesNotMatch(r.error ?? "", /tool stderr/); // no empty stderr tail block
   });
 
   it("truncates a very long tool stderr to the tail", () => {
@@ -400,6 +415,42 @@ describe("per-repo lock", () => {
     } finally {
       process.env.PATH = origPath;
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("findStrykerNetTestProject (issue #14: multi-project repos)", () => {
+  it("finds the sibling test csproj that references the source project", () => {
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      mkdirSync(join(repo, "AppTests"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(
+        join(repo, "AppTests", "AppTests.csproj"),
+        '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>' +
+          '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />' +
+          // backslash separators are DELIBERATE: real csproj content is Windows-style,
+          // and this asserts the discovery normalizes them on every platform
+          '<ProjectReference Include="..\\App\\App.csproj" />' +
+          "</ItemGroup></Project>",
+      );
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, "../AppTests/AppTests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("returns undefined when no test project references the source project", () => {
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, undefined);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
     }
   });
 });
