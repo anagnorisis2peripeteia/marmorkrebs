@@ -392,11 +392,11 @@ function runStrykerNetInProjectGroups(
   };
   const failures: string[] = [];
 
-  for (const { projectDir, files: scopedFiles } of groups) {
+  for (const { projectDir, files: scopedFiles, testProject } of groups) {
     if (!scopedFiles.length) continue;
 
     const displayDir = projectDir === repoDir ? "<repo-root>" : relative(repoDir, projectDir);
-    const command = buildStrykerNetCommand(scopedFiles, projectDir);
+    const command = buildStrykerNetCommand(scopedFiles, projectDir, testProject);
     const result = spawnSync("bash", ["-c", command], {
       cwd: repoDir,
       encoding: "utf8" as const,
@@ -453,7 +453,7 @@ function runStrykerNetInProjectGroups(
 function groupStrykerNetSourceFilesByProject(
   repoDir: string,
   sourceFiles: string[],
-): { projectDir: string; files: string[] }[] {
+): { projectDir: string; files: string[]; testProject?: string }[] {
   const repoRoot = resolve(repoDir);
   const bucketed = new Map<string, string[]>();
 
@@ -470,10 +470,67 @@ function groupStrykerNetSourceFilesByProject(
     }
   }
 
-  return [...bucketed.entries()].map(([projectDir, files]) => ({
-    projectDir,
-    files,
-  }));
+  return [...bucketed.entries()].map(([projectDir, files]) => {
+    const testProject = findStrykerNetTestProject(repoRoot, projectDir);
+    return testProject ? { projectDir, files, testProject } : { projectDir, files };
+  });
+}
+
+// Multi-project repos keep tests in a sibling csproj; running Stryker.NET from the
+// source-project dir without pointing at it aborts with "can't be mutated because no
+// test project references it" (issue #14). Find a test csproj that (a) looks like a
+// test project (Microsoft.NET.Test.Sdk / IsTestProject / *Test(s) name) and
+// (b) ProjectReferences a csproj inside the group's project dir; return it relative
+// to the project dir for --test-project. Single-project repos return undefined and
+// keep the old invocation.
+export function findStrykerNetTestProject(repoRoot: string, projectDir: string): string | undefined {
+  const projectCsprojs = new Set<string>();
+  for (const entry of readdirSync(projectDir, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith(".csproj")) {
+      projectCsprojs.add(resolve(projectDir, entry.name));
+    }
+  }
+  if (!projectCsprojs.size) return undefined;
+
+  for (const candidate of walkCsProjFiles(resolve(repoRoot))) {
+    const candidateDir = dirname(candidate);
+    if (candidateDir === resolve(projectDir)) continue;
+    let content: string;
+    try {
+      content = readFileSync(candidate, "utf8");
+    } catch {
+      continue;
+    }
+    const looksLikeTests =
+      /Microsoft\.NET\.Test\.Sdk|<IsTestProject>\s*true/i.test(content) ||
+      /tests?\.csproj$/i.test(candidate);
+    if (!looksLikeTests) continue;
+    for (const match of content.matchAll(/<ProjectReference\s+Include\s*=\s*"([^"]+)"/gi)) {
+      const referenced = resolve(candidateDir, match[1].replace(/\\/g, "/"));
+      if (projectCsprojs.has(referenced)) {
+        return relative(projectDir, candidate).replace(/\\/g, "/");
+      }
+    }
+  }
+  return undefined;
+}
+
+function* walkCsProjFiles(root: string, depth = 0): Generator<string> {
+  if (depth > 6) return;
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (/^(\.git|node_modules|bin|obj|packages)$/i.test(entry.name)) continue;
+      yield* walkCsProjFiles(join(root, entry.name), depth + 1);
+    } else if (entry.isFile() && entry.name.endsWith(".csproj")) {
+      yield join(root, entry.name);
+    }
+  }
 }
 
 function findNearestCsProjDir(repoRoot: string, filePath: string): string | null {

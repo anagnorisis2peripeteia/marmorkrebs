@@ -68,6 +68,16 @@ describe("mutate glob anchoring and vacuous-ignore guard", () => {
     assert.ok(!cmd.includes("5-9"));
   });
 
+  it("passes --test-project when a sibling test csproj was discovered (issue #14)", () => {
+    const cmd = buildStrykerNetCommand(["Calc.cs"], "/repo/Lib", "../Lib.Tests/Lib.Tests.csproj");
+    assert.ok(cmd.includes("--test-project '../Lib.Tests/Lib.Tests.csproj'"));
+  });
+
+  it("omits --test-project for single-project repos", () => {
+    const cmd = buildStrykerNetCommand(["Calc.cs"], "/repo");
+    assert.ok(!cmd.includes("--test-project"));
+  });
+
   it("errors when every mutant is Ignored (filter matched nothing)", () => {
     // Shape captured from the providers-windows CI run 2026-07-04: dotnet-stryker
     // 4.x, both mutants Ignored because the mutate glob resolved against the

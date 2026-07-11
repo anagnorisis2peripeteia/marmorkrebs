@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reconcileResult, runMutationAnalysis } from "./runner.js";
+import { findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
 import { EMPTY_RESULT, type MutationConfig, type MutationResult } from "./types.js";
 
 function result(overrides: Partial<MutationResult>): MutationResult {
@@ -414,6 +414,40 @@ describe("per-repo lock", () => {
     } finally {
       process.env.PATH = origPath;
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("findStrykerNetTestProject (issue #14: multi-project repos)", () => {
+  it("finds the sibling test csproj that references the source project", () => {
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      mkdirSync(join(repo, "AppTests"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(
+        join(repo, "AppTests", "AppTests.csproj"),
+        '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>' +
+          '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />' +
+          '<ProjectReference Include="..\\App\\App.csproj" />' +
+          "</ItemGroup></Project>",
+      );
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, "../AppTests/AppTests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("returns undefined when no test project references the source project", () => {
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, undefined);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
     }
   });
 });
