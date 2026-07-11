@@ -383,6 +383,7 @@ function runStrykerNetInProjectGroups(
     return {
       ...EMPTY_RESULT,
       tool: "stryker-net",
+      score: 0, // a failed resolution must never present EMPTY_RESULT's passing score (issue #15 class)
       error: "could not resolve any .csproj for the changed C# files; run from explicit --project/project file",
       elapsedMs: Date.now() - startMs,
     };
