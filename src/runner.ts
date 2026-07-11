@@ -243,7 +243,7 @@ function runOnExistingLease(
     // the grouping walks the local filesystem and spawns bash locally, which under
     // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
     // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
-    // command path; multi-project crabbox support is tracked in issue #16.
+    // command path; multi-project crabbox support is tracked in issue #17.
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -282,7 +282,7 @@ function runInCrabbox(
     // the grouping walks the local filesystem and spawns bash locally, which under
     // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
     // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
-    // command path; multi-project crabbox support is tracked in issue #16.
+    // command path; multi-project crabbox support is tracked in issue #17.
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
