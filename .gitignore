@@ -5,3 +5,4 @@ dist/
 # StrykerJS temp sandbox + report output
 .stryker-tmp/
 reports/
+*.tgz
