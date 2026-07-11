@@ -51,14 +51,15 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.match(r.error ?? "", /bash: not found/);
   });
 
-  it("does not append tool output when a failed run has empty stderr (guard is failed AND toolErr)", () => {
+  it("appends the exit code even when a failed run has empty stderr (silent death still carries its code)", () => {
     const r = reconcileResult(
       result({ error: "Failed to parse" }),
       { ...OK_EXEC, exitCode: 1, stderr: "   " },
       { tool: "gomu" } as MutationConfig,
     );
-    assert.equal(r.error, "Failed to parse"); // nothing to surface -> parse error unchanged
-    assert.doesNotMatch(r.error ?? "", /tool exited/);
+    assert.match(r.error ?? "", /Failed to parse/);
+    assert.match(r.error ?? "", /tool exited 1/);
+    assert.doesNotMatch(r.error ?? "", /tool stderr/); // no empty stderr tail block
   });
 
   it("truncates a very long tool stderr to the tail", () => {
