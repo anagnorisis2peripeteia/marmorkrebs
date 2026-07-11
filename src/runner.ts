@@ -239,9 +239,11 @@ function runOnExistingLease(
       crabboxSync(leaseId, repoDir, remoteDir);
     }
 
-    if (config.tool === "stryker-net") {
-      return runStrykerNetInProjectGroups(remoteDir, sourceFiles, config, startMs);
-    }
+    // stryker-net project grouping + test-project discovery are HOST-lane only:
+    // the grouping walks the local filesystem and spawns bash locally, which under
+    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
+    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
+    // command path; multi-project crabbox support is tracked in issue #16.
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -276,9 +278,11 @@ function runInCrabbox(
     const remoteDir = "/tmp/mutation-target";
     crabboxSync(lease.id, repoDir, remoteDir);
 
-    if (config.tool === "stryker-net") {
-      return runStrykerNetInProjectGroups(remoteDir, sourceFiles, config, startMs);
-    }
+    // stryker-net project grouping + test-project discovery are HOST-lane only:
+    // the grouping walks the local filesystem and spawns bash locally, which under
+    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
+    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
+    // command path; multi-project crabbox support is tracked in issue #16.
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
