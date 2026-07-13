@@ -517,7 +517,16 @@ export function parseCxxSource(
 ): MutationResult {
   let report: CxxReport;
   try {
-    report = JSON.parse(output) as CxxReport;
+    const parsed: unknown = JSON.parse(output);
+    // JSON.parse only throws on syntactically invalid input; valid JSON that is
+    // null, an array, or a primitive parses fine and then crashes the reads
+    // below (`report.killed`, `report.mutants.filter`). Require a plain object
+    // so malformed tool output degrades to the same graceful error the catch
+    // produces instead of throwing.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("expected a JSON object");
+    }
+    report = parsed as CxxReport;
   } catch (error) {
     return {
       ...EMPTY_RESULT,
@@ -534,8 +543,9 @@ export function parseCxxSource(
   const checkError = report.checkErrors ?? report.check_error ?? 0;
   const timeout = report.timeouts ?? 0;
   const noCoverage = report.noCoverage ?? report.no_coverage ?? 0;
+  const mutants: CxxMutant[] = Array.isArray(report.mutants) ? report.mutants : [];
   const ignored =
-    report.ignored ?? (report.mutants ?? []).filter((m) => m.status === "IGNORED").length;
+    report.ignored ?? mutants.filter((m) => m.status === "IGNORED").length;
 
   const scored = killed + survived;
   let score: number;
@@ -553,7 +563,7 @@ export function parseCxxSource(
   }
   score = Math.min(1, Math.max(0, Math.round(score * 100) / 100));
 
-  const survivingMutants: SurvivingMutant[] = (report.mutants ?? [])
+  const survivingMutants: SurvivingMutant[] = mutants
     .filter((m) => m.status === "SURVIVED")
     .map((m) => ({
       file: m.file,
