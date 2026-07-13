@@ -568,6 +568,33 @@ describe("parseCxxSource", () => {
     assert.equal(result.tool, "stryker-cxx");
   });
 
+  it("degrades gracefully on JSON that parses to a non-object shape", () => {
+    // JSON.parse SUCCEEDS on these, so the try/catch never fired and the reads
+    // below crashed (found by einsiedlerkrebs's property run):
+    //   "null" -> report.killed -> "Cannot read properties of null".
+    // A non-object shape must fold into the same graceful parse error, not throw.
+    for (const output of ["null", "[]", "[1, 2, 3]", "42", '"a string"', "true"]) {
+      const result = parseCxxSource(output, "stryker-cxx");
+      assert.notEqual(result.error, null, `expected a graceful error for ${output}`);
+      assert.match(result.error ?? "", /Failed to parse stryker-cxx output/);
+      assert.equal(result.tool, "stryker-cxx");
+      assert.equal(result.survivingMutants.length, 0);
+    }
+  });
+
+  it("treats a non-array mutants field as no mutants instead of crashing", () => {
+    // '{"mutants":5}' parses to a valid object, but `report.mutants` is not an
+    // array, so `.filter` threw "filter is not a function". Degrade to empty.
+    for (const output of ['{"mutants":5}', '{"mutants":"nope"}', '{"mutants":{}}']) {
+      const result = parseCxxSource(output, "stryker-cxx");
+      assert.equal(result.tool, "stryker-cxx");
+      assert.equal(result.killed, 0);
+      assert.equal(result.survived, 0);
+      assert.equal(result.ignored, 0);
+      assert.equal(result.survivingMutants.length, 0);
+    }
+  });
+
   it("defaults score to 1 when nothing was scored", () => {
     const report = {
       target_files: [],
