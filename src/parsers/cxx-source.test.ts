@@ -568,30 +568,41 @@ describe("parseCxxSource", () => {
     assert.equal(result.tool, "stryker-cxx");
   });
 
-  it("degrades gracefully on JSON that parses to a non-object shape", () => {
-    // JSON.parse SUCCEEDS on these, so the try/catch never fired and the reads
-    // below crashed (found by einsiedlerkrebs's property run):
-    //   "null" -> report.killed -> "Cannot read properties of null".
-    // A non-object shape must fold into the same graceful parse error, not throw.
-    for (const output of ["null", "[]", "[1, 2, 3]", "42", '"a string"', "true"]) {
+  it("fails closed for valid JSON that is not an object report", () => {
+    // JSON.parse SUCCEEDS on all of these (found by einsiedlerkrebs's property
+    // run); the parser must reject them, not degrade to a clean zero-mutant pass.
+    for (const output of ["null", "[]", "[1, 2, 3]", "42", "true", '"text"']) {
       const result = parseCxxSource(output, "stryker-cxx");
-      assert.notEqual(result.error, null, `expected a graceful error for ${output}`);
-      assert.match(result.error ?? "", /Failed to parse stryker-cxx output/);
+
       assert.equal(result.tool, "stryker-cxx");
+      assert.equal(result.totalMutants, 0);
       assert.equal(result.survivingMutants.length, 0);
+      assert.match(result.error ?? "", /expected a top-level JSON object/);
     }
   });
 
-  it("treats a non-array mutants field as no mutants instead of crashing", () => {
-    // '{"mutants":5}' parses to a valid object, but `report.mutants` is not an
-    // array, so `.filter` threw "filter is not a function". Degrade to empty.
+  it("fails closed when mutants is present but is not an array", () => {
     for (const output of ['{"mutants":5}', '{"mutants":"nope"}', '{"mutants":{}}']) {
       const result = parseCxxSource(output, "stryker-cxx");
-      assert.equal(result.tool, "stryker-cxx");
-      assert.equal(result.killed, 0);
-      assert.equal(result.survived, 0);
-      assert.equal(result.ignored, 0);
-      assert.equal(result.survivingMutants.length, 0);
+
+      assert.equal(result.totalMutants, 0);
+      assert.match(result.error ?? "", /expected mutants to be an array/);
+    }
+  });
+
+  it("fails closed when a mutant entry is not an object", () => {
+    // Cover each disqualifying shape so every clause of the guard is exercised:
+    // null, a primitive (non-object), and an array (typeof is "object").
+    for (const output of [
+      '{"mutants":[null]}',
+      '{"mutants":[42]}',
+      '{"mutants":["text"]}',
+      '{"mutants":[[1]]}',
+    ]) {
+      const result = parseCxxSource(output, "stryker-cxx");
+
+      assert.equal(result.totalMutants, 0);
+      assert.match(result.error ?? "", /expected every mutant to be an object/);
     }
   });
 

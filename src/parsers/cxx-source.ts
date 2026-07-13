@@ -515,18 +515,9 @@ export function parseCxxSource(
   tool: MutationTool = "stryker-cxx",
   config: Pick<MutationConfig, "parityProfile"> = {},
 ): MutationResult {
-  let report: CxxReport;
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(output);
-    // JSON.parse only throws on syntactically invalid input; valid JSON that is
-    // null, an array, or a primitive parses fine and then crashes the reads
-    // below (`report.killed`, `report.mutants.filter`). Require a plain object
-    // so malformed tool output degrades to the same graceful error the catch
-    // produces instead of throwing.
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      throw new Error("expected a JSON object");
-    }
-    report = parsed as CxxReport;
+    parsed = JSON.parse(output) as unknown;
   } catch (error) {
     return {
       ...EMPTY_RESULT,
@@ -535,6 +526,23 @@ export function parseCxxSource(
         `Failed to parse ${tool} output: ` +
         `${error instanceof Error ? error.message : String(error)}`,
     };
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return invalidCxxReport(tool, "expected a top-level JSON object");
+  }
+
+  const report = parsed as Partial<CxxReport>;
+  if (report.mutants !== undefined && !Array.isArray(report.mutants)) {
+    return invalidCxxReport(tool, "expected mutants to be an array when present");
+  }
+  if (
+    report.mutants?.some(
+      (mutant) =>
+        mutant === null || typeof mutant !== "object" || Array.isArray(mutant),
+    )
+  ) {
+    return invalidCxxReport(tool, "expected every mutant to be an object");
   }
 
   const killed = report.killed ?? 0;
@@ -682,6 +690,14 @@ export function parseCxxSource(
   };
 
   return result;
+}
+
+function invalidCxxReport(tool: MutationTool, reason: string): MutationResult {
+  return {
+    ...EMPTY_RESULT,
+    tool,
+    error: `Invalid ${tool} output schema: ${reason}`,
+  };
 }
 
 function parityProfileFailures(
