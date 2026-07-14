@@ -17,6 +17,10 @@ describe("parseScopedTargets", () => {
     assert.deepEqual(t, [{ file: "a.go", ranges: [] }]);
     assert.ok(matchesScope("a.go", 999, t), "whole-file intent must not be narrowed");
   });
+
+  it("normalizes a reversed range to [min,max]", () => {
+    assert.deepEqual(parseScopedTargets(["a.go:40-12"]), [{ file: "a.go", ranges: [[12, 40]] }]);
+  });
 });
 
 describe("matchesScope", () => {
@@ -38,5 +42,18 @@ describe("matchesScope", () => {
 
   it("non-listed files never match", () => {
     assert.ok(!matchesScope("other.go", 1, targets));
+  });
+
+  it("a reversed range still matches its interior (endpoint order irrelevant)", () => {
+    const reversed = parseScopedTargets(["pkg/b.go:40-12"]);
+    const forward = parseScopedTargets(["pkg/b.go:12-40"]);
+    for (const line of [12, 20, 40]) {
+      assert.ok(matchesScope("pkg/b.go", line, reversed), `line ${line} must match reversed range`);
+      assert.equal(
+        matchesScope("pkg/b.go", line, reversed),
+        matchesScope("pkg/b.go", line, forward),
+        `reversed and forward ranges must agree at line ${line}`,
+      );
+    }
   });
 });

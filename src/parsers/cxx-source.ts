@@ -544,6 +544,35 @@ export function parseCxxSource(
   ) {
     return invalidCxxReport(tool, "expected every mutant to be an object");
   }
+  // Beyond #22's object check: require each mutant to carry a status from stryker-cxx's
+  // documented vocabulary. An object-shaped element with no status (`{}`) or an unknown
+  // status ("CORRUPT") is corrupt evidence that would otherwise pass on the trusted
+  // top-level counts (score 1.0) — the cardinal fail-open. Canonicalize case/separator-
+  // insensitively and reuse the SAME form for the survivor/ignored tallies below, so an
+  // accepted "Survived"/"no-coverage" can't then be dropped by an exact compare.
+  const CXX_STATUSES = new Set([
+    // report.v1 statuses = stryker-cxx MTE_STATUSES (its src/payload-contract.js) plus the
+    // build/check/compile-error statuses that map to the report's buildErrors/checkErrors.
+    "killed",
+    "survived",
+    "nocoverage",
+    "timeout",
+    "ignored",
+    "pending",
+    "runtimeerror",
+    "builderror",
+    "checkerror",
+    "compileerror",
+  ]);
+  const normStatus = (s: unknown): string =>
+    typeof s === "string" ? s.replace(/[_\s-]/g, "").toLowerCase() : "";
+  if (
+    report.mutants?.some(
+      (mutant) => !CXX_STATUSES.has(normStatus((mutant as { status?: unknown }).status)),
+    )
+  ) {
+    return invalidCxxReport(tool, "expected every mutant to carry a known stryker-cxx status");
+  }
 
   const killed = report.killed ?? 0;
   const survived = report.survived ?? 0;
@@ -553,7 +582,7 @@ export function parseCxxSource(
   const noCoverage = report.noCoverage ?? report.no_coverage ?? 0;
   const mutants: CxxMutant[] = Array.isArray(report.mutants) ? report.mutants : [];
   const ignored =
-    report.ignored ?? mutants.filter((m) => m.status === "IGNORED").length;
+    report.ignored ?? mutants.filter((m) => normStatus(m.status) === "ignored").length;
 
   const scored = killed + survived;
   let score: number;
@@ -572,7 +601,7 @@ export function parseCxxSource(
   score = Math.min(1, Math.max(0, Math.round(score * 100) / 100));
 
   const survivingMutants: SurvivingMutant[] = mutants
-    .filter((m) => m.status === "SURVIVED")
+    .filter((m) => normStatus(m.status) === "survived")
     .map((m) => ({
       file: m.file,
       line: m.line,

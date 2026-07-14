@@ -606,6 +606,56 @@ describe("parseCxxSource", () => {
     }
   });
 
+  it("fails closed when a mutant entry has no known status", () => {
+    // #22 rejects non-object elements; an object-shaped element with a missing or unknown
+    // status (`{}`, `{status:"CORRUPT"}`) is still corrupt evidence that would otherwise pass
+    // on the trusted top-level counts (score 1.0) — the cardinal fail-open. First mutant
+    // captured from a real stryker-cxx 0.1.0 run on fixtures/stryker-cxx (2026-07-14).
+    const capturedKilled = {
+      mutator: "EqualityOperator",
+      file: "calc.cpp",
+      line: 17,
+      col: 26,
+      original: "!=",
+      mutated: "==",
+      status: "KILLED",
+      id: "calc.cpp:17:26:EqualityOperator:119f2d77e17f",
+    };
+    for (const corrupt of [{}, { mutator: "AOR" }, { status: "" }, { status: "CORRUPT" }]) {
+      const output = JSON.stringify({ killed: 2, score: 1, mutants: [capturedKilled, corrupt] });
+      const result = parseCxxSource(output, "stryker-cxx");
+      assert.equal(result.totalMutants, 0);
+      assert.match(
+        result.error ?? "",
+        /expected every mutant to carry a known stryker-cxx status/,
+        `corrupt mutant ${JSON.stringify(corrupt)} must fail closed`,
+      );
+    }
+  });
+
+  it("accepts real stryker-cxx statuses case- and separator-insensitively and tallies them", () => {
+    // report.v1 uppercases the vocabulary; a future casing/separator drift must not falsely
+    // fail a valid report, and — crucially — an accepted non-uppercase survivor/ignored must
+    // still be tallied (validation and the tallies share one canonical form).
+    for (const status of ["KILLED", "Survived", "NO_COVERAGE", "no-coverage", "Timeout", "RUNTIME_ERROR", "Pending"]) {
+      const r = parseCxxSource(JSON.stringify({ killed: 1, mutants: [{ status }] }), "stryker-cxx");
+      assert.ok(!r.error, `status ${status} must be accepted, got: ${r.error}`);
+    }
+    const survivor = parseCxxSource(
+      JSON.stringify({
+        survived: 1,
+        mutants: [{ status: "Survived", file: "a.cpp", line: 1, mutator: "m", original: "x", mutated: "y" }],
+      }),
+      "stryker-cxx",
+    );
+    assert.equal(survivor.survivingMutants.length, 1, "a mixed-case Survived mutant must still be counted");
+    const ign = parseCxxSource(
+      JSON.stringify({ mutants: [{ status: "Ignored", file: "a.cpp", line: 1, mutator: "m", original: "x", mutated: "y" }] }),
+      "stryker-cxx",
+    );
+    assert.equal(ign.ignored, 1, "a mixed-case Ignored mutant must still be counted");
+  });
+
   it("defaults score to 1 when nothing was scored", () => {
     const report = {
       target_files: [],
