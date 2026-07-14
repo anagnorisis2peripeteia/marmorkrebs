@@ -16,8 +16,11 @@ export function parseScopedTargets(entries: string[]): ScopedTarget[] {
     const existing = byFile.get(file) ?? { ranges: [], whole: false };
     if (m) {
       const start = parseInt(m[2], 10);
-      const end = m[3] === undefined ? start : parseInt(m[3], 10);
-      existing.ranges.push([start, end]);
+      const rawEnd = m[3] === undefined ? start : parseInt(m[3], 10);
+      // Normalize reversed ranges ("f:40-12") to [min,max]. matchesScope tests
+      // `line >= s && line <= e`, which a verbatim reversed range satisfies for NO real
+      // line — silently silencing the whole file instead of scoping lines 12-40.
+      existing.ranges.push(start <= rawEnd ? [start, rawEnd] : [rawEnd, start]);
     } else {
       existing.whole = true; // a bare entry means whole-file scope — it WINS over ranges
     }
