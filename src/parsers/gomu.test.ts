@@ -112,7 +112,11 @@ describe("parseGomu", () => {
       results: [],
     };
     const result = parseGomu(JSON.stringify(report));
-    assert.equal(result.score, 1);
+    // A proved-nothing (all-zero) parse scores 0, not a vacuous 1 (#25) — a perfect score must
+    // imply at least one DETECTED mutant. The deliberate allow-empty PASS is enforced at the
+    // reconcile layer (reconcileResult normalizes an allowed empty run to the canonical pass),
+    // not by the parser scoring an empty run as perfect.
+    assert.equal(result.score, 0);
     assert.equal(result.totalMutants, 0);
   });
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
+import { finalizeStrykerNetGroups, findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
 import { EMPTY_RESULT, type MutationConfig, type MutationResult } from "./types.js";
 
 function result(overrides: Partial<MutationResult>): MutationResult {
@@ -114,6 +114,60 @@ describe("reconcileResult (fail-closed net)", () => {
     assert.equal(allowed.error, null);
   });
 
+  it("#25: an allowed empty run still passes a threshold — reconcile normalizes the now-0 empty score", () => {
+    // Post-#25, a parser scores a proved-nothing run 0 (a perfect score must imply a detected
+    // mutant). An explicitly-allowed empty run must still PASS as it did before #25, so that 0
+    // must never reach the CLI's `--threshold` check (score < threshold → exit 2). reconcileResult
+    // normalizes an allowed empty run to the canonical passing empty result.
+    const allowed = reconcileResult(
+      result({ totalMutants: 0, score: 0 }), // the parser's honest empty score, post-#25
+      OK_EXEC,
+      { tool: "gomu", allowEmpty: true } as MutationConfig,
+    );
+    assert.equal(allowed.error, null);
+    assert.equal(allowed.score, 1, "an allowed empty run must not read as a threshold failure");
+    assert.equal(allowed.totalMutants, 0);
+  });
+
+  it("does NOT normalize a corrupt totalMutants=0 report that carries scored mutants (no erasing survivors)", () => {
+    // cargo-mutants/cxx read totalMutants from the report, so a corrupt report can claim total 0
+    // while carrying real scored mutants / survivors. The allow-empty normalization must not scrub
+    // that into a perfect pass — it fails closed as corrupt evidence. Each scored dimension is
+    // exercised INDEPENDENTLY (with empty survivingMutants) so that no single count can be dropped
+    // from the corrupt-detection sum without a test noticing, plus the survivors-only direction.
+    const surv = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        file: `a${i}.rs`,
+        line: i + 1,
+        mutator: "m",
+        description: "x->y",
+        status: "survived" as const,
+      }));
+    const corruptCases: Array<Partial<MutationResult>> = [
+      { killed: 2 }, // killed without a matching total
+      { survived: 3 }, // survived count with no array entries
+      { timeout: 1 },
+      { noCoverage: 4 },
+      { survived: 2, survivingMutants: surv(2) }, // count + array survivors
+      { survivingMutants: surv(1) }, // survivor in the array, all counts 0
+    ];
+    for (const c of corruptCases) {
+      const r = reconcileResult(result({ totalMutants: 0, score: 0, ...c }), OK_EXEC, {
+        tool: "cargo-mutants",
+        allowEmpty: true,
+      } as MutationConfig);
+      assert.notEqual(r.error, null, `corrupt total=0 with ${JSON.stringify(c)} must fail closed`);
+      assert.match(r.error ?? "", /corrupt counts/);
+    }
+    // a genuinely all-zero allowed run is still the canonical empty PASS (not caught by the guard)
+    const genuinelyEmpty = reconcileResult(result({ totalMutants: 0, score: 0 }), OK_EXEC, {
+      tool: "cargo-mutants",
+      allowEmpty: true,
+    } as MutationConfig);
+    assert.equal(genuinelyEmpty.error, null);
+    assert.equal(genuinelyEmpty.score, 1);
+  });
+
   it("allowEmpty does NOT mask a real tool failure", () => {
     const r = reconcileResult(
       result({ totalMutants: 0, score: 1 }),
@@ -149,6 +203,47 @@ describe("reconcileResult (fail-closed net)", () => {
     );
     assert.equal(r.error, null);
     assert.equal(r.score, 0.6);
+  });
+});
+
+describe("finalizeStrykerNetGroups (grouped merge, fail-closed)", () => {
+  const merged = (o: Partial<MutationResult>): MutationResult => ({
+    ...EMPTY_RESULT,
+    tool: "stryker-net",
+    survivingMutants: [],
+    error: null,
+    ...o,
+  });
+
+  it("#25 regression: an all-empty allowed grouped run PASSES (score 1), not the merge recompute of 0", () => {
+    // Every group was an allowed-empty run (each reconciled to EMPTY_RESULT, contributing 0 counts),
+    // so merged.totalMutants === 0. Recomputing mutationScore(0,0,0,0) would yield 0 (post-#25) and
+    // fail --threshold — the exact allow-empty regression on the ONE lane whose merged result is not
+    // the reconciled result. Must present the canonical empty PASS instead.
+    const r = finalizeStrykerNetGroups(merged({ totalMutants: 0 }), []);
+    assert.equal(r.error, null);
+    assert.equal(r.score, 1, "an allowed all-empty grouped run must not read as a threshold failure");
+    assert.equal(r.totalMutants, 0);
+    assert.equal(r.tool, "stryker-net");
+  });
+
+  it("recomputes the merged score from pooled counts when mutants were scored", () => {
+    const r = finalizeStrykerNetGroups(merged({ totalMutants: 4, killed: 2, timeout: 1, survived: 1 }), []);
+    assert.equal(r.error, null);
+    assert.equal(r.score, 0.75); // (2 killed + 1 timeout) / 4
+  });
+
+  it("a real survivor across groups is NOT masked by the empty normalization", () => {
+    const r = finalizeStrykerNetGroups(merged({ totalMutants: 2, killed: 1, survived: 1 }), []);
+    assert.equal(r.error, null);
+    assert.equal(r.score, 0.5);
+  });
+
+  it("any group failure fails the whole run closed with score 0", () => {
+    const r = finalizeStrykerNetGroups(merged({ totalMutants: 0 }), ["Lib: compile error"]);
+    assert.equal(r.score, 0);
+    assert.match(r.error ?? "", /failed in one or more project scopes/);
+    assert.match(r.error ?? "", /compile error/);
   });
 });
 
