@@ -239,11 +239,9 @@ function runOnExistingLease(
       crabboxSync(leaseId, repoDir, remoteDir);
     }
 
-    // stryker-net project grouping + test-project discovery are HOST-lane only:
-    // the grouping walks the local filesystem and spawns bash locally, which under
-    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
-    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
-    // command path; multi-project crabbox support is tracked in issue #17.
+    if (config.tool === "stryker-net") {
+      return runStrykerNetInProjectGroupsCrabbox(repoDir, sourceFiles, config, remoteDir, leaseId, startMs);
+    }
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -278,11 +276,9 @@ function runInCrabbox(
     const remoteDir = "/tmp/mutation-target";
     crabboxSync(lease.id, repoDir, remoteDir);
 
-    // stryker-net project grouping + test-project discovery are HOST-lane only:
-    // the grouping walks the local filesystem and spawns bash locally, which under
-    // a crabbox lease would (a) escape the sandbox and (b) readdir container paths
-    // on the host (review P0s, 2026-07-11). Crabbox keeps the pre-grouping generic
-    // command path; multi-project crabbox support is tracked in issue #17.
+    if (config.tool === "stryker-net") {
+      return runStrykerNetInProjectGroupsCrabbox(repoDir, sourceFiles, config, remoteDir, lease.id, startMs);
+    }
 
     const command = buildCommand(config, sourceFiles, remoteDir);
     const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
@@ -457,6 +453,96 @@ function runStrykerNetInProjectGroups(
       // A failed run must never present a passing score (issue #15: the failure
       // payload reported score 1 with totalMutants 0, readable as a perfect run
       // by anything that skips the exit code / error field).
+      score: 0,
+      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  merged.score = mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage);
+  merged.elapsedMs = Date.now() - startMs;
+  return merged;
+}
+
+function runStrykerNetInProjectGroupsCrabbox(
+  repoDir: string,
+  sourceFiles: string[],
+  config: MutationConfig,
+  remoteDir: string,
+  leaseId: string,
+  startMs: number,
+): MutationResult {
+  const groups = groupStrykerNetSourceFilesByProject(repoDir, sourceFiles);
+  if (!groups.length) {
+    return {
+      ...EMPTY_RESULT,
+      tool: "stryker-net",
+      score: 0, // a failed resolution must never present EMPTY_RESULT's passing score (issue #15 class)
+      error: "could not resolve any .csproj for the changed C# files; run from explicit --project/project file",
+      elapsedMs: Date.now() - startMs,
+    };
+  }
+
+  const timeoutMs = config.timeoutMs ?? 8 * 60 * 1000;
+  let merged: MutationResult = {
+    ...EMPTY_RESULT,
+    tool: "stryker-net",
+    survivingMutants: [],
+    elapsedMs: 0,
+    error: null,
+  };
+  const failures: string[] = [];
+
+  for (const { projectDir, files: scopedFiles, testProject } of groups) {
+    if (!scopedFiles.length) continue;
+
+    // The remote workdir lives in a Linux container, so join with POSIX
+    // separators regardless of host platform — resolve()/relative() on a
+    // Windows host would mint a drive-anchored backslash path here.
+    const localRelativeProjectDir = relative(resolve(repoDir), projectDir).replace(/\\/g, "/");
+    const displayDir = localRelativeProjectDir === "" ? "<repo-root>" : localRelativeProjectDir;
+    const remoteWorkDir =
+      localRelativeProjectDir === "" ? remoteDir : `${remoteDir}/${localRelativeProjectDir}`;
+    const command = buildStrykerNetCommand(scopedFiles, remoteWorkDir, testProject);
+    const result = crabboxExec(leaseId, command, timeoutMs);
+
+    const parsed = parseOutput(config, result.stdout, result.stderr, scopedFiles);
+    const reconciled = reconcileResult(
+      parsed,
+      { exitCode: result.exitCode, signal: null, spawnError: null, stderr: result.stderr },
+      config,
+    );
+
+    console.error(
+      `[marmorkrebs] ${config.tool}: ${scopedFiles.length} source file(s) in scope for ${displayDir}; running: ${redactSecrets(
+        command,
+      )}`,
+    );
+
+    if (reconciled.error) {
+      failures.push(`${displayDir || projectDir}: ${reconciled.error}`);
+      continue;
+    }
+
+    merged.totalMutants += reconciled.totalMutants;
+    merged.killed += reconciled.killed;
+    merged.survived += reconciled.survived;
+    merged.timeout += reconciled.timeout;
+    merged.noCoverage += reconciled.noCoverage;
+    merged.ignored += reconciled.ignored;
+    merged.survivingMutants.push(
+      ...reconciled.survivingMutants.map((m) => ({
+        ...m,
+        file: displayDir === "<repo-root>" ? m.file : `${displayDir}/${m.file}`.replace(/\\/g, "/"),
+      })),
+    );
+    merged.error = null;
+  }
+
+  if (failures.length) {
+    return {
+      ...merged,
+      tool: "stryker-net",
       score: 0,
       error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
       elapsedMs: Date.now() - startMs,

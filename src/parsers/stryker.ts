@@ -121,6 +121,12 @@ export function buildStrykerCommand(
       tsconfigFile: "marmorkrebs.notsconfig.json",
       tempDirName: ".stryker-tmp",
       dryRunTimeoutMinutes: dryRunTimeoutMinutes ?? 5,
+      // Stryker derives the per-mutant timeout as timeoutFactor×dryRunNet+timeoutMS.
+      // The dry run measures a WARM build (incremental tsc), but each mutant builds in
+      // a COLD sandbox, so the default 5s buffer kills every mutant mid-build as
+      // "Timeout" before its tests run — score 100% with zero real test verdicts
+      // (issue #26). A 60s floor lets cold builds finish; genuine hangs still die.
+      timeoutMS: 60_000,
       ...(excludeMutations?.length ? { mutator: { excludedMutations: excludeMutations } } : {}),
     }).replace(/'/g, `'\\''`);
     // cd + scrub the PRIOR report FIRST: the trailing `cat` runs on every exit path, so a
