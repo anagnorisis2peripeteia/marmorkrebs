@@ -323,6 +323,130 @@ esac
 });
 
 describe(
+  "stryker-net crabbox project grouping (issue #17)",
+  { skip: process.platform === "win32" ? "fake crabbox needs POSIX exec" : false },
+  () => {
+    // Field-for-field subset of the Stryker.NET mutation-report.json schema already
+    // validated against the real tool in parsers/stryker-net.test.ts + the stryker-net
+    // provider validator; this suite exercises grouping/merging, not parser fidelity.
+    // Both grouped runs return it, so the merged result and survivor re-anchoring are
+    // what distinguish the groups.
+    const CANNED_STRYKER_NET_REPORT = JSON.stringify({
+      files: {
+        "Calc.cs": {
+          mutants: [
+            { status: "Killed", mutatorName: "ArithmeticOperator", location: { start: { line: 3 } } },
+            { status: "Survived", mutatorName: "EqualityOperator", location: { start: { line: 7 } } },
+          ],
+        },
+      },
+    });
+
+    let dir: string;
+    let repoDir: string;
+    let calls: string;
+
+    function makeFake(mode: string) {
+      dir = mkdtempSync(join(tmpdir(), "marmorkrebs-fakecrab-groups-"));
+      repoDir = mkdtempSync(join(tmpdir(), "marmorkrebs-fakecrab-groups-repo-"));
+      calls = join(dir, "calls.log");
+      writeFileSync(calls, "");
+      const bin = join(dir, "crabbox");
+      writeFileSync(
+        bin,
+        `#!/bin/bash
+echo "$@" >> "${calls}"
+case "${mode}:$1" in
+  ok:ssh) printf '%s' '${CANNED_STRYKER_NET_REPORT}'; exit 0 ;;
+  dead:ssh) echo "container gone" >&2; exit 127 ;;
+  *) exit 0 ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      process.env.CRABBOX_BIN = bin;
+
+      // Two source projects plus a sibling test project referencing only App:
+      // App gets --test-project, Lib must not.
+      mkdirSync(join(repoDir, "App"));
+      mkdirSync(join(repoDir, "App.Tests"));
+      mkdirSync(join(repoDir, "Lib"));
+      writeFileSync(join(repoDir, "App", "App.csproj"), "<Project />\n");
+      writeFileSync(join(repoDir, "App", "Calc.cs"), "class C {}\n");
+      writeFileSync(
+        join(repoDir, "App.Tests", "App.Tests.csproj"),
+        '<Project><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" />' +
+          '<ProjectReference Include="../App/App.csproj" /></ItemGroup></Project>\n',
+      );
+      writeFileSync(join(repoDir, "Lib", "Lib.csproj"), "<Project />\n");
+      writeFileSync(join(repoDir, "Lib", "Util.cs"), "class U {}\n");
+    }
+
+    function cleanupFake() {
+      delete process.env.CRABBOX_BIN;
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+
+    function sshCommands(): string[] {
+      return readFileSync(calls, "utf8")
+        .split("\n")
+        .filter((line) => line.startsWith("ssh "));
+    }
+
+    it("runs one grouped exec per project with remote workdirs, test-project discovery, and merged survivors", () => {
+      makeFake("ok");
+      try {
+        const r = runMutationAnalysis(repoDir, ["App/Calc.cs", "Lib/Util.cs"], {
+          tool: "stryker-net",
+          leaseId: "fake-lease-9",
+          skipSync: true,
+        } as MutationConfig);
+        assert.equal(r.error, null);
+
+        const cmds = sshCommands();
+        assert.equal(cmds.length, 2, "one crabbox exec per project group");
+        const appCmd = cmds.find((c) => c.includes("cd '/tmp/mutation-target/App'"));
+        const libCmd = cmds.find((c) => c.includes("cd '/tmp/mutation-target/Lib'"));
+        assert.ok(appCmd, "App group must run in the translated remote project dir");
+        assert.ok(libCmd, "Lib group must run in the translated remote project dir");
+        assert.match(appCmd ?? "", /--mutate '\*\*\/Calc\.cs'/);
+        assert.match(appCmd ?? "", /--test-project '\.\.\/App\.Tests\/App\.Tests\.csproj'/);
+        assert.ok(!(libCmd ?? "").includes("--test-project"), "Lib has no referencing test project");
+
+        // Both canned reports: 1 killed + 1 survived each.
+        assert.equal(r.totalMutants, 4);
+        assert.equal(r.killed, 2);
+        assert.equal(r.survived, 2);
+        assert.equal(r.score, 0.5);
+        assert.deepEqual(
+          r.survivingMutants.map((m) => m.file).sort(),
+          ["App/Calc.cs", "Lib/Calc.cs"],
+          "survivor paths must be re-anchored to the repo root per group",
+        );
+      } finally {
+        cleanupFake();
+      }
+    });
+
+    it("a failed project scope fails the whole run closed with score 0", () => {
+      makeFake("dead");
+      try {
+        const r = runMutationAnalysis(repoDir, ["App/Calc.cs", "Lib/Util.cs"], {
+          tool: "stryker-net",
+          leaseId: "fake-lease-9",
+          skipSync: true,
+        } as MutationConfig);
+        assert.match(r.error ?? "", /failed in one or more project scopes/);
+        assert.equal(r.score, 0);
+      } finally {
+        cleanupFake();
+      }
+    });
+  },
+);
+
+describe(
   "stryker stale-report guard",
   { skip: process.platform === "win32" ? "PATH-hiding probe is POSIX-shaped" : false },
   () => {
