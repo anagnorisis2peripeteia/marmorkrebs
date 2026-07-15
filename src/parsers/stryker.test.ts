@@ -134,6 +134,11 @@ describe("parseStryker", () => {
     const command = buildStrykerCommand(["src/config.ts"], "/repo", "npm test", undefined, 12);
     assert.ok(command.includes('"dryRunTimeoutMinutes":12'));
   });
+
+  it("floors the per-mutant timeout so cold-sandbox builds are not killed as Timeout (issue #26)", () => {
+    const command = buildStrykerCommand(["src/config.ts"], "/repo", "npm run build && npm test");
+    assert.ok(command.includes('"timeoutMS":60000'));
+  });
 });
 
 describe("buildStrykerCommand scoping and mutator policy", () => {
