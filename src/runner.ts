@@ -114,6 +114,21 @@ export function reconcileResult(
         error: `tool exited ${exec.exitCode} with no parseable result: ${stderrTail}`,
       };
     }
+    // `totalMutants === 0` alone does NOT prove an empty run: the cargo-mutants and cxx lanes read
+    // totalMutants straight from the report (not derived from the scored counts), so a corrupt or
+    // truncated report can claim `total: 0` while carrying real scored mutants / survivors. Treating
+    // that as an allowed-empty run would let the normalization below erase those survivors into a
+    // perfect pass — a malformed-report → score-1.0 fail-open through the net itself. Only a
+    // genuinely all-zero parse is empty; anything else is corrupt evidence and fails closed.
+    const scoredCounts = parsed.killed + parsed.survived + parsed.timeout + parsed.noCoverage;
+    if (scoredCounts > 0 || parsed.survivingMutants.length > 0) {
+      return {
+        ...parsed,
+        error:
+          `report claims totalMutants=0 but carries ${scoredCounts} scored mutant(s) and ` +
+          `${parsed.survivingMutants.length} survivor(s) — corrupt counts; refusing to score as empty`,
+      };
+    }
     if (!config.allowEmpty) {
       return {
         ...parsed,
@@ -122,6 +137,12 @@ export function reconcileResult(
           "pass --allow-empty if this diff legitimately has nothing to mutate",
       };
     }
+    // An explicitly-allowed, genuinely-empty run is a pass BY POLICY — normalize it to the canonical
+    // empty result (score 1, no error) so it matches runMutationAnalysis's staticEmpty path and never
+    // reads as a threshold failure. Necessary now that mutationScore scores a proved-nothing run
+    // 0 (#25): without this, an allowed empty parse would carry score 0 and fail `--threshold`,
+    // silently regressing the deliberate allow-empty pass.
+    return { ...EMPTY_RESULT, tool: parsed.tool };
   }
   return parsed;
 }
@@ -368,6 +389,41 @@ function runLocally(
   }
 }
 
+// Finalize an accumulated grouped stryker-net merge (shared by the local + crabbox variants).
+// Pure (no timing/IO) so it is unit-testable — the merge score-recompute bug (an allowed all-empty
+// run scoring 0) slipped through precisely because the grouped tail had no direct test.
+//   - any group errored  -> score 0 + combined error (issue #15: a failed run never scores passing)
+//   - EVERY group was an allowed-empty run (merged.totalMutants === 0; a non-allowed empty group
+//     lands in `failures` first) -> the canonical empty PASS. Necessary because mutationScore now
+//     scores a proved-nothing run 0 (#25); recomputing over all-zero counts would overwrite the
+//     per-group score-1 normalization and fail --threshold — the exact allow-empty regression
+//     reconcileResult prevents on the single-lane path.
+//   - otherwise -> recompute the merged score from the pooled counts.
+export function finalizeStrykerNetGroups(
+  merged: MutationResult,
+  failures: string[],
+): MutationResult {
+  if (failures.length) {
+    return {
+      ...merged,
+      tool: "stryker-net",
+      score: 0,
+      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
+    };
+  }
+  // Genuinely all-empty: every group was an allowed-empty run. reconcileResult fails a corrupt
+  // count-vs-total group into `failures` (handled above) and normalizes a valid empty group to
+  // all-zero counts, so `merged.totalMutants === 0` here provably implies every scored count is 0
+  // too — no survivor can hide behind this empty PASS.
+  if (merged.totalMutants === 0) {
+    return { ...EMPTY_RESULT, tool: "stryker-net" };
+  }
+  return {
+    ...merged,
+    score: mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage),
+  };
+}
+
 function runStrykerNetInProjectGroups(
   repoDir: string,
   sourceFiles: string[],
@@ -446,22 +502,11 @@ function runStrykerNetInProjectGroups(
     merged.error = null;
   }
 
-  if (failures.length) {
-    return {
-      ...merged,
-      tool: "stryker-net",
-      // A failed run must never present a passing score (issue #15: the failure
-      // payload reported score 1 with totalMutants 0, readable as a perfect run
-      // by anything that skips the exit code / error field).
-      score: 0,
-      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
-      elapsedMs: Date.now() - startMs,
-    };
-  }
-
-  merged.score = mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage);
-  merged.elapsedMs = Date.now() - startMs;
-  return merged;
+  // A failed run must never present a passing score, and an all-empty allowed run must present the
+  // canonical empty PASS rather than mutationScore's now-0 proved-nothing score (see finalizer).
+  const finalized = finalizeStrykerNetGroups(merged, failures);
+  finalized.elapsedMs = Date.now() - startMs;
+  return finalized;
 }
 
 function runStrykerNetInProjectGroupsCrabbox(
@@ -539,19 +584,9 @@ function runStrykerNetInProjectGroupsCrabbox(
     merged.error = null;
   }
 
-  if (failures.length) {
-    return {
-      ...merged,
-      tool: "stryker-net",
-      score: 0,
-      error: `Stryker.NET failed in one or more project scopes: ${failures.join(" | ")}`,
-      elapsedMs: Date.now() - startMs,
-    };
-  }
-
-  merged.score = mutationScore(merged.killed, merged.timeout, merged.survived, merged.noCoverage);
-  merged.elapsedMs = Date.now() - startMs;
-  return merged;
+  const finalized = finalizeStrykerNetGroups(merged, failures);
+  finalized.elapsedMs = Date.now() - startMs;
+  return finalized;
 }
 
 function groupStrykerNetSourceFilesByProject(

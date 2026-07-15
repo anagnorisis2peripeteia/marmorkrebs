@@ -171,6 +171,11 @@ export interface MutationResult {
  * `ignored` never enters the formula (and an all-ignored run is a hard error via
  * reconcileResult's vacuous-run guard). Exception: stryker-cxx reports the shim's
  * own thresholds/score untouched — the shim's semantics govern the pytorch gates.
+ *
+ * An empty run (no scorable mutants) scores **0**, not a vacuous 1 — a perfect score
+ * must imply at least one DETECTED mutant, so a run that proved nothing never scores
+ * perfect (#25). Empty runs are still hard-errored upstream by reconcileResult's
+ * vacuous-run guard; this keeps the helper honest in isolation too.
  */
 export function mutationScore(
   killed: number,
@@ -180,7 +185,7 @@ export function mutationScore(
 ): number {
   const detected = killed + timeout;
   const denom = detected + survived + noCoverage;
-  return denom > 0 ? Math.round((detected / denom) * 100) / 100 : 1;
+  return denom > 0 ? Math.round((detected / denom) * 100) / 100 : 0;
 }
 
 export const EMPTY_RESULT: MutationResult = {

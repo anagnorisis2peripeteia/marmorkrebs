@@ -63,6 +63,108 @@ describe("parseCxxSource", () => {
     assert.equal(result.error, null);
   });
 
+  it("#24: fails closed when the mutants array shows more survivors than the top-level counts", () => {
+    // Summary hides a survivor: killed:1, survived:0, score:1 — but the array carries a SURVIVED
+    // mutant. The score-based verdict would PASS; the array contradiction must fail closed.
+    const report = {
+      total: 1,
+      killed: 1,
+      survived: 0,
+      score: 1,
+      mutants: [
+        {
+          mutator: "LogicalOperator",
+          file: "a.cpp",
+          line: 1,
+          col: 1,
+          original: "&&",
+          mutated: "||",
+          status: "SURVIVED",
+          detail: "",
+        },
+      ],
+    };
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.ok(result.error, "expected a fail-closed error on the summary/array contradiction");
+    assert.match(result.error ?? "", /contradicts the array|survivor/i);
+  });
+
+  it("#24: a filtered SUBSET (array-count <= summary-count) still passes — no false reject", () => {
+    // Under --scope-lines the array is a subset: 2 survivors reported, only 1 in the (scoped) array.
+    // array-survivors(1) <= summary-survived(2) => no contradiction, must NOT fail closed.
+    const report = {
+      total: 5,
+      killed: 3,
+      survived: 2,
+      score: 0.6,
+      mutants: [
+        { mutator: "L", file: "a.cpp", line: 1, col: 1, original: "&&", mutated: "||", status: "SURVIVED", detail: "" },
+      ],
+    };
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.equal(result.error, null);
+    assert.equal(result.survived, 2);
+  });
+
+  it("#24: fails closed when the survived key is OMITTED but the array carries a survivor (bypass)", () => {
+    // The parser does not derive `survived` from the array — an absent count defaults to 0
+    // (cxx-source.ts:578), and the cxx verdict uses report.score (here 1). So a summary that hides a
+    // survivor by DELETING the key (not lying `survived: 0`) would score a perfect 1 with a visible
+    // survivor. The guard compares against the RESOLVED survived (0), so this fails closed just like
+    // the explicit `survived: 0` case. (Real stryker-cxx reports always emit survived, so no valid
+    // run is affected.)
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      totalMutants: 1,
+      killed: 1,
+      score: 1,
+      // survived key intentionally absent
+      mutants: [{ status: "SURVIVED", file: "a.cpp", line: 1, col: 1, mutator: "m", original: "x", mutated: "y", detail: "" }],
+    };
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.ok(result.error, "a survivor with the survived key omitted must fail closed");
+    assert.match(result.error ?? "", /contradicts the array|survivor/i);
+  });
+
+  it("#24: fails closed when the array shows more no-coverage mutants than the summary claims", () => {
+    // Same fail-open class as survivors: no-coverage counts as UNDETECTED in mutationScore, so a
+    // no-coverage mutant hidden from the top-level count inflates the score just like a survivor.
+    const report = {
+      killed: 1,
+      survived: 0,
+      no_coverage: 0,
+      score: 1,
+      mutants: [
+        { mutator: "m", file: "a.cpp", line: 1, col: 1, original: "x", mutated: "y", status: "NO_COVERAGE", detail: "" },
+      ],
+    };
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.ok(result.error, "expected a fail-closed error on the no-coverage contradiction");
+    assert.match(result.error ?? "", /no-coverage|uncovered/i);
+  });
+
+  it("#25 twin: a no-coverage-only report with no score field scores 0, not a vacuous 1", () => {
+    // killed + survived === 0 with the `score` key omitted used to fall back to a perfect 1.0 — the
+    // same "a run that detected nothing scores perfect" footgun as #25. The report is internally
+    // consistent (noCoverage:2 matches the array, so both #24 guards pass), so only the fallback
+    // governs the score. It must be 0.
+    const report = {
+      schemaVersion: "stryker-cxx.report.v1",
+      totalMutants: 2,
+      killed: 0,
+      survived: 0,
+      no_coverage: 2,
+      // score key intentionally absent
+      mutants: [
+        { mutator: "m", file: "a.cpp", line: 1, col: 1, original: "x", mutated: "y", status: "NO_COVERAGE", detail: "" },
+        { mutator: "m", file: "b.cpp", line: 2, col: 1, original: "x", mutated: "y", status: "NO_COVERAGE", detail: "" },
+      ],
+    };
+    const result = parseCxxSource(JSON.stringify(report), "stryker-cxx");
+    assert.equal(result.error, null);
+    assert.equal(result.score, 0, "a run that killed nothing must not score a vacuous 1.0");
+  });
+
   it("builds stryker-cxx as the external C++ mutation command", () => {
     const command = buildCxxSourceCommand(["src/foo.cpp"], "/repo", {
       tool: "stryker-cxx",
@@ -637,8 +739,12 @@ describe("parseCxxSource", () => {
     // report.v1 uppercases the vocabulary; a future casing/separator drift must not falsely
     // fail a valid report, and — crucially — an accepted non-uppercase survivor/ignored must
     // still be tallied (validation and the tallies share one canonical form).
+    // `survived: 1` keeps the fixture internally consistent for the "Survived" iteration: without a
+    // survived count, the #24 cross-check correctly reads a lone array survivor as contradicting an
+    // (absent → 0) summary claim. This test only asserts status-string acceptance, so a matching
+    // count preserves that intent without encoding a summary/array contradiction.
     for (const status of ["KILLED", "Survived", "NO_COVERAGE", "no-coverage", "Timeout", "RUNTIME_ERROR", "Pending"]) {
-      const r = parseCxxSource(JSON.stringify({ killed: 1, mutants: [{ status }] }), "stryker-cxx");
+      const r = parseCxxSource(JSON.stringify({ killed: 1, survived: 1, mutants: [{ status }] }), "stryker-cxx");
       assert.ok(!r.error, `status ${status} must be accepted, got: ${r.error}`);
     }
     const survivor = parseCxxSource(

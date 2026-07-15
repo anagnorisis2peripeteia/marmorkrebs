@@ -75,7 +75,9 @@ describe("parseStryker", () => {
     const result = parseStryker(JSON.stringify({ files: {} }));
     assert.equal(result.killed, 0);
     assert.equal(result.survived, 0);
-    assert.equal(result.score, 1);
+    // Empty parse scores 0, not a vacuous 1 (#25); the allow-empty PASS is enforced by
+    // reconcileResult, not by the parser scoring nothing as perfect.
+    assert.equal(result.score, 0);
   });
 
   // Captured from a REAL @stryker-mutator/core 9.6.1 run with @stryker-mutator/typescript-checker

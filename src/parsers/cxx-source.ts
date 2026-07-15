@@ -596,7 +596,12 @@ export function parseCxxSource(
   } else if (scored > 0) {
     score = killed / scored;
   } else {
-    score = 1;
+    // Nothing was killed or survived: not a perfect run — the same #25 principle (a perfect score
+    // must imply at least one DETECTED mutant). A genuinely-empty cxx run is handled by
+    // reconcileResult (allowed → EMPTY_RESULT pass, else error); this 0 only surfaces for a report
+    // that carries mutants but scored none (e.g. no-coverage-only), which must not read as a vacuous
+    // 1.0. (cxx keeps its documented killed/scored semantics above — only the empty fallback changes.)
+    score = 0;
   }
   score = Math.min(1, Math.max(0, Math.round(score * 100) / 100));
 
@@ -609,6 +614,42 @@ export function parseCxxSource(
       description: `${m.original}->${m.mutated}`,
       status: "survived" as const,
     }));
+
+  // #24: cross-validate the mutants array against the top-level counts. The array may be a filtered
+  // SUBSET (under --scope-lines), so array-count <= summary-count is expected and valid — but if the
+  // array shows MORE than the summary accounts for, a real escape is being hidden from the verdict.
+  // Fail closed; never re-derive the score from the array (re-derivation is #24's deferred
+  // higher-risk option — unsafe for scoped subsets).
+  //
+  // SURVIVORS are the live score fail-open and use the RESOLVED count (`survived`, = `report.survived
+  // ?? 0`) — the exact value the verdict is scored on. The parser does NOT derive `survived` from the
+  // array (line 578 defaults an absent count to 0; only `ignored`/`totalMutants` are ever derived),
+  // so a report that omits `survived` — or lies `survived: 0` — claims ZERO survivors, and any
+  // survivor in the array (`length > survived`) contradicts that and inflates `killed/(killed +
+  // survived)`. Comparing against the resolved 0 (not `report.survived !== undefined`) is what closes
+  // the omit-the-key bypass; a valid complete-or-subset report always has `survived >= array`.
+  //
+  // NO-COVERAGE does NOT enter the cxx score formula, so a hidden one cannot inflate the verdict —
+  // it is only corrupt evidence. It is therefore checked leniently: only when the summary EXPLICITLY
+  // reports a noCoverage count the array exceeds, so a report that merely omits the field (no score
+  // impact) is never false-rejected. TIMEOUT is omitted entirely: it is DETECTED, so under-reporting
+  // it can only DEFLATE the score.
+  const arrayNoCoverage = mutants.filter((m) => normStatus(m.status) === "nocoverage").length;
+  const reportedNoCoverage = report.noCoverage ?? report.no_coverage;
+  if (survivingMutants.length > survived) {
+    return invalidCxxReport(
+      tool,
+      `mutants array has ${survivingMutants.length} survivor(s) but top-level survived=${survived} — ` +
+        `the summary contradicts the array (a survivor hidden from the counts would pass on score)`,
+    );
+  }
+  if (reportedNoCoverage !== undefined && arrayNoCoverage > reportedNoCoverage) {
+    return invalidCxxReport(
+      tool,
+      `mutants array has ${arrayNoCoverage} no-coverage mutant(s) but top-level noCoverage=${reportedNoCoverage} — ` +
+        `the summary under-reports no-coverage vs its own array (corrupt counts — the report can't be trusted)`,
+    );
+  }
 
   const dryRunFailed =
     report.schemaVersion === "stryker-cxx.report.v1" &&
