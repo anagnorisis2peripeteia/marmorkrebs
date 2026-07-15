@@ -624,16 +624,26 @@ function groupStrykerNetSourceFilesByProject(
 // keep the old invocation.
 export function findStrykerNetTestProject(repoRoot: string, projectDir: string): string | undefined {
   const projectCsprojs = new Set<string>();
+  const sourceNames: string[] = [];
   for (const entry of readdirSync(projectDir, { withFileTypes: true })) {
     if (entry.isFile() && entry.name.endsWith(".csproj")) {
       projectCsprojs.add(resolve(projectDir, entry.name));
+      sourceNames.push(entry.name.slice(0, -".csproj".length));
     }
   }
   if (!projectCsprojs.size) return undefined;
 
-  for (const candidate of walkCsProjFiles(resolve(repoRoot))) {
+  // Collect EVERY test project that references the source project, then rank — issue #14 only
+  // returned the first in filesystem-walk order, so a repo with both a co-located unit-test project
+  // and a distant integration-test project could get the integration one (which references but does
+  // not unit-cover the file → `totalMutants: 0`, #28). Rank by name match then directory proximity;
+  // walk order is the stable tiebreak (`>` keeps the earlier candidate on an equal score).
+  const resolvedRepoRoot = resolve(repoRoot);
+  const resolvedProjectDir = resolve(projectDir);
+  let best: { path: string; score: TestProjectRank } | undefined;
+  for (const candidate of walkCsProjFiles(resolvedRepoRoot)) {
     const candidateDir = dirname(candidate);
-    if (candidateDir === resolve(projectDir)) continue;
+    if (candidateDir === resolvedProjectDir) continue;
     let content: string;
     try {
       content = readFileSync(candidate, "utf8");
@@ -644,14 +654,81 @@ export function findStrykerNetTestProject(repoRoot: string, projectDir: string):
       /Microsoft\.NET\.Test\.Sdk|<IsTestProject>\s*true/i.test(content) ||
       /tests?\.csproj$/i.test(candidate);
     if (!looksLikeTests) continue;
+    let references = false;
     for (const match of content.matchAll(/<ProjectReference\s+Include\s*=\s*"([^"]+)"/gi)) {
       const referenced = resolve(candidateDir, match[1].replace(/\\/g, "/"));
       if (projectCsprojs.has(referenced)) {
-        return relative(projectDir, candidate).replace(/\\/g, "/");
+        references = true;
+        break;
       }
     }
+    if (!references) continue;
+    const score = rankTestProjectCandidate(sourceNames, resolvedProjectDir, candidate);
+    // Higher name rank wins; equal rank falls to closer proximity; a full tie keeps the earlier
+    // walk-order candidate (strict `>` on both), preserving the pre-#28 behavior for single hits.
+    if (
+      !best ||
+      score.nameRank > best.score.nameRank ||
+      (score.nameRank === best.score.nameRank && score.proximity > best.score.proximity)
+    ) {
+      best = { path: candidate, score };
+    }
   }
-  return undefined;
+  return best ? relative(projectDir, best.path).replace(/\\/g, "/") : undefined;
+}
+
+interface TestProjectRank {
+  nameRank: number;
+  proximity: number;
+}
+
+// Rank a referencing test project by how likely it is to actually COVER the source project (#28),
+// with the two signals the issue asks for — name match, then proximity:
+//   nameRank — 2: the project NAMES the source (`<Source>`-prefixed with a WHOLE test-suffix token,
+//                 e.g. `Core.UnitTest` / `Core.Tests`) — the strongest "this covers the source"
+//                 signal; 1: any other referencing test project.
+//   proximity — negated path-hop distance from the source project dir; a co-located sibling ranks
+//               above a distant tree (e.g. a separate integration-test tree), breaking ties within
+//               the same nameRank.
+// There is deliberately NO separate "integration" penalty: a distant integration-test project loses
+// on proximity to a co-located unit project, and one named `<Source>IntegrationTests` doesn't
+// token-match so it stays rank 1 — whereas a substring check on "integration" misfired for repos
+// whose own source product or an ancestor dir is integration-named.
+function rankTestProjectCandidate(
+  sourceNames: string[],
+  resolvedProjectDir: string,
+  candidatePath: string,
+): TestProjectRank {
+  const candName = basename(candidatePath).replace(/\.csproj$/i, "").toLowerCase();
+  let nameRank = 1;
+  for (const src of sourceNames) {
+    const s = src.toLowerCase();
+    if (!candName.startsWith(s)) continue;
+    // The remainder after the source name must be EXACTLY a test-suffix token, not merely contain
+    // "test" — otherwise a sibling product's tests match (source `Foo` would rank `FooBar.Tests` as
+    // if it covered Foo, because "bartests" contains "test"). Only SEPARATORS are stripped (not
+    // digits) so `Core.UnitTest`, `CoreUnitTests`, and `AppTests` qualify, while a numeric-suffixed
+    // sibling product like `Foo2` (source `Foo`) keeps its `2` and stays rank 1 (`2tests` ≠ token).
+    // Accept both orderings of the unit/test convention: `UnitTest(s)` and the tests-first
+    // `Tests.Unit` layout (`Foo.Tests.Unit` → `testsunit`). `testsintegration` stays unmatched, so
+    // an integration sibling in the same layout is still only rank 1 (no integration special-casing).
+    const suffix = candName.slice(s.length).replace(/[._\-\s]/g, "");
+    if (
+      suffix === "test" ||
+      suffix === "tests" ||
+      suffix === "unittest" ||
+      suffix === "unittests" ||
+      suffix === "testunit" ||
+      suffix === "testsunit"
+    ) {
+      nameRank = 2;
+      break;
+    }
+  }
+
+  const rel = relative(resolvedProjectDir, dirname(candidatePath));
+  const hops = rel === "" ? 0 : rel.split(/[\\/]/).filter((seg) => seg.length > 0).length;
+  return { nameRank, proximity: -hops };
 }
 
 function* walkCsProjFiles(root: string, depth = 0): Generator<string> {
