@@ -765,4 +765,151 @@ describe("findStrykerNetTestProject (issue #14: multi-project repos)", () => {
       rmSync(repo, { recursive: true, force: true });
     }
   });
+
+  const testCsproj = (ref: string) =>
+    '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>' +
+    '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.0.0" />' +
+    `<ProjectReference Include="${ref}" />` +
+    "</ItemGroup></Project>";
+
+  it("#28: prefers the co-located unit-test project over a distant integration project that also references the source", () => {
+    // The Stryker.NET self-mutation repro: two test projects reference Core.csproj — a sibling
+    // unit-test project (unit-covers the file) and a distant integration project (does not). The
+    // integration tree sorts BEFORE src/ in the walk, so the old first-hit logic picked it →
+    // totalMutants: 0. Ranking must pick the unit-test project.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "src", "Core"), { recursive: true });
+      mkdirSync(join(repo, "src", "Core.UnitTest"), { recursive: true });
+      mkdirSync(join(repo, "integrationtest", "Validation"), { recursive: true });
+      writeFileSync(join(repo, "src", "Core", "Core.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "src", "Core.UnitTest", "Core.UnitTest.csproj"), testCsproj("..\\Core\\Core.csproj"));
+      writeFileSync(join(repo, "integrationtest", "Validation", "Validation.csproj"), testCsproj("..\\..\\src\\Core\\Core.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "src", "Core"));
+      assert.equal(found, "../Core.UnitTest/Core.UnitTest.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: prefers a name-matching <Source>.Tests project even when a generic test project is walked first", () => {
+    // `AAAHarness` sorts (and is walked) BEFORE `App.Tests`, so the pre-#28 first-hit logic would
+    // return it. Name match must override walk order and pick `App.Tests`. Walk order diverging from
+    // the correct answer is what makes this test actually exercise the ranking (not the fallback).
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      mkdirSync(join(repo, "AAAHarness"), { recursive: true });
+      mkdirSync(join(repo, "App.Tests"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "AAAHarness", "AAAHarness.csproj"), testCsproj("..\\App\\App.csproj"));
+      writeFileSync(join(repo, "App.Tests", "App.Tests.csproj"), testCsproj("..\\App\\App.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, "../App.Tests/App.Tests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: within the same name rank, the closer test project wins (proximity tiebreak)", () => {
+    // Two plain (non-name-matching, non-integration) test projects both reference App: the nearer
+    // one must win purely on proximity.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "src", "App"), { recursive: true });
+      mkdirSync(join(repo, "src", "Near"), { recursive: true });
+      mkdirSync(join(repo, "extras", "deep", "Far"), { recursive: true });
+      writeFileSync(join(repo, "src", "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "src", "Near", "Near.csproj"), testCsproj("..\\App\\App.csproj"));
+      writeFileSync(join(repo, "extras", "deep", "Far", "Far.csproj"), testCsproj("..\\..\\..\\src\\App\\App.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "src", "App"));
+      assert.equal(found, "../Near/Near.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: an integration-named source's own unit tests are picked (no 'integration' substring penalty)", () => {
+    // A source product named `<Something>.Integration` has legitimate unit tests
+    // `<Something>.Integration.Tests`. A substring "integration" penalty on the candidate path would
+    // wrongly demote those real unit tests and let a generic `Harness` win → 0 killed → false gate
+    // failure. Ranking on name/proximity only, the name-matching unit tests (rank 2) win over the
+    // walked-first generic (rank 1) regardless of the "integration" in the shared product name.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "Payments.Integration"), { recursive: true });
+      mkdirSync(join(repo, "Harness"), { recursive: true });
+      mkdirSync(join(repo, "Payments.Integration.Tests"), { recursive: true });
+      writeFileSync(join(repo, "Payments.Integration", "Payments.Integration.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "Harness", "Harness.csproj"), testCsproj("..\\Payments.Integration\\Payments.Integration.csproj"));
+      writeFileSync(
+        join(repo, "Payments.Integration.Tests", "Payments.Integration.Tests.csproj"),
+        testCsproj("..\\Payments.Integration\\Payments.Integration.csproj"),
+      );
+      const found = findStrykerNetTestProject(repo, join(repo, "Payments.Integration"));
+      assert.equal(found, "../Payments.Integration.Tests/Payments.Integration.Tests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: a sibling product's test project does NOT name-match the source (suffix must be a whole test token)", () => {
+    // `App.Extras.Tests` (a different product's tests) is walked BEFORE `App.Tests` and starts with
+    // "App", but its remainder "extras.tests" is not a whole test token, so it must stay rank 1 and
+    // lose to the exact `App.Tests`. Without the whole-token check it would tie at rank 2 and win by
+    // walk order.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "App"), { recursive: true });
+      mkdirSync(join(repo, "App.Extras.Tests"), { recursive: true });
+      mkdirSync(join(repo, "App.Tests"), { recursive: true });
+      writeFileSync(join(repo, "App", "App.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "App.Extras.Tests", "App.Extras.Tests.csproj"), testCsproj("..\\App\\App.csproj"));
+      writeFileSync(join(repo, "App.Tests", "App.Tests.csproj"), testCsproj("..\\App\\App.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "App"));
+      assert.equal(found, "../App.Tests/App.Tests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: a numeric-suffixed sibling product (Foo2.Tests vs source Foo) does NOT name-match", () => {
+    // Only separators are stripped from the suffix, not digits: `Foo2.Tests` -> remainder `2tests`
+    // (not a token) -> rank 1, so it must lose to the real `Foo.Tests` (rank 2) EVEN though the
+    // sibling sits closer. Stripping all non-letters would make `2.tests` -> `tests` -> rank 2 and
+    // the nearer sibling would wrongly win.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "Foo"), { recursive: true });
+      mkdirSync(join(repo, "Foo2.Tests"), { recursive: true });
+      mkdirSync(join(repo, "far", "Foo.Tests"), { recursive: true });
+      writeFileSync(join(repo, "Foo", "Foo.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "Foo2.Tests", "Foo2.Tests.csproj"), testCsproj("..\\Foo\\Foo.csproj"));
+      writeFileSync(join(repo, "far", "Foo.Tests", "Foo.Tests.csproj"), testCsproj("..\\..\\Foo\\Foo.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "Foo"));
+      assert.equal(found, "../far/Foo.Tests/Foo.Tests.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("#28: the tests-first `<Source>.Tests.Unit` layout name-matches (not just `<Source>.UnitTest`)", () => {
+    // The common .NET `tests/Foo.Tests.Unit` + `tests/Foo.Tests.Integration` layout: `Foo.Tests.Unit`
+    // strips to `testsunit` (a token) → rank 2, `Foo.Tests.Integration` → `testsintegration` (not a
+    // token) → rank 1. The integration project is walked FIRST, so nameRank — not walk order — must
+    // pick the unit project.
+    const repo = mkdtempSync(join(tmpdir(), "mk-sn-"));
+    try {
+      mkdirSync(join(repo, "src", "Foo"), { recursive: true });
+      mkdirSync(join(repo, "tests", "Foo.Tests.Unit"), { recursive: true });
+      mkdirSync(join(repo, "tests", "Foo.Tests.Integration"), { recursive: true });
+      writeFileSync(join(repo, "src", "Foo", "Foo.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"/>");
+      writeFileSync(join(repo, "tests", "Foo.Tests.Unit", "Foo.Tests.Unit.csproj"), testCsproj("..\\..\\src\\Foo\\Foo.csproj"));
+      writeFileSync(join(repo, "tests", "Foo.Tests.Integration", "Foo.Tests.Integration.csproj"), testCsproj("..\\..\\src\\Foo\\Foo.csproj"));
+      const found = findStrykerNetTestProject(repo, join(repo, "src", "Foo"));
+      assert.equal(found, "../../tests/Foo.Tests.Unit/Foo.Tests.Unit.csproj");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
 });

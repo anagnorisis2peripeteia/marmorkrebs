@@ -115,6 +115,10 @@ const SPECS = {
     fixture: "fixtures/stryker-net",
     changedFiles: ["Lib/Calc.cs"],
     minMutants: 2,
+    // Add() is covered by Lib.Tests, so >=1 mutant must be KILLED. This also discriminates the #28
+    // multi-candidate ranking: Lib.IntegrationTests references Lib but covers nothing, so if the
+    // selector (wrongly) picked it over Lib.Tests, nothing would be killed and this would fail.
+    minKilled: 1,
     survivorsIn: ["Calc.cs"], // Sub() is untested
     noSurvivorsIn: [],
     forbiddenArtifacts: [".marmorkrebs-stryker", "StrykerOutput"],
@@ -146,6 +150,9 @@ function validate(tool, spec) {
     if (result.error) return fail(tool, `real run errored: ${result.error}`, result);
     if (result.totalMutants < spec.minMutants) {
       return fail(tool, `expected >=${spec.minMutants} mutants, got ${result.totalMutants}`, result);
+    }
+    if (spec.minKilled && result.killed < spec.minKilled) {
+      return fail(tool, `expected >=${spec.minKilled} killed mutant(s), got ${result.killed}`, result);
     }
     for (const f of spec.survivorsIn) {
       if (!result.survivingMutants.some((m) => m.file.endsWith(f))) {
