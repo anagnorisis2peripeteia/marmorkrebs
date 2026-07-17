@@ -93,15 +93,45 @@ export function parseMutmut(output: string, changedFiles: string[] = []): Mutati
 }
 
 export function buildMutmutCommand(sourceFiles: string[], workDir: string): string {
-  // mutmut 3 has no per-file CLI scoping worth trusting; run per repo config, then let
-  // parseMutmut filter to the changed files. `mutants/` is mutmut's working dir — scrub
-  // it before (stale state) and after (clean tree). Progress/emoji UI goes to stderr;
-  // stdout carries only the `results --all true` lines. A `run` failure exits with the
-  // run's code so reconcileResult fails closed.
+  const scopedFiles = Array.from(
+    new Set(
+      sourceFiles
+        .map((f) => f.replace(/:\d+(?:-\d+)?$/, ""))
+        .filter((f) => f.endsWith(".py")),
+    ),
+  );
+  const sourcePaths = JSON.stringify(scopedFiles);
+
+  // mutmut 3 has no per-invocation CLI path flag; swap in a temporary scoped config
+  // so `run` only mutates the intended files, then restore repository config.
+  // `mutants/` is mutmut's working dir — scrub it before (stale state) and after
+  // (clean tree). Progress/emoji UI goes to stderr; stdout carries only the
+  // `results --all true` lines. A `run` failure exits with the run's code so
+  // reconcileResult fails closed.
   const wd = shellEscape(workDir);
   return (
-    `cd '${wd}' && rm -rf mutants && mutmut run 1>&2; code=$?; ` +
+    `cd '${wd}' && rm -rf mutants && backup=$(mktemp) && has_setup_cfg=0; ` +
+    `if [ -f setup.cfg ]; then has_setup_cfg=1; cp setup.cfg \"$backup\"; fi; ` +
+    `export MUTMUT_SOURCE_PATHS=${shellEscape(sourcePaths)}; ` +
+    `python3 - <<'PY'\n` +
+    `import configparser\n` +
+    `import json\n` +
+    `import os\n` +
+    `from pathlib import Path\n\n` +
+    `cfg = Path('setup.cfg')\n` +
+    `paths = json.loads(os.environ['MUTMUT_SOURCE_PATHS'])\n` +
+    `parser = configparser.ConfigParser(interpolation=None)\n\n` +
+    `if cfg.exists():\n` +
+    `    parser.read_file(cfg.open())\n` +
+    `if not parser.has_section('mutmut'):\n` +
+    `    parser['mutmut'] = {}\n` +
+    `parser['mutmut']['source_paths'] = '[' + ', '.join(repr(p) for p in paths) + ']'\n` +
+    `with cfg.open('w') as f:\n` +
+    `    parser.write(f)\n` +
+    `PY\n` +
+    `mutmut run 1>&2; code=$?; ` +
     `if [ $code -eq 0 ]; then mutmut results --all true; code=$?; fi; ` +
+    `if [ $has_setup_cfg -eq 1 ]; then mv \"$backup\" setup.cfg; else rm -f setup.cfg; fi; ` +
     `rm -rf mutants; exit $code`
   );
 }
