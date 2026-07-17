@@ -127,13 +127,12 @@ export function parseGomu(output: string, changedFiles?: string[]): MutationResu
 // report to mutation-report.json in the CWD (stdout is human progress). It also skips
 // a bare file that has no test file of its own, and consults .gomu_history.json to
 // silently skip "unchanged" files EVEN WITH --incremental=false. So: run gomu once
-// per unique PACKAGE DIR of the changed files (Go tests are package-scoped), scrub
-// the history file around every run, collect each report into a temp dir, then emit
-// them on stdout separated by ASCII RS (0x1e); parseGomu merges the reports and
-// filters mutants back down to the changed files. The `&&` chain is fail-closed:
-// gomu (v0.2.1) exits 0 when mutants merely survive and non-zero only on real
-// errors, so any failed run aborts the chain and a partial result can never be
-// scored as a full one.
+// per unique CHANGED FILE in scope (line-range suffixes are stripped), scrub the
+// history file around every run, collect each report into a temp dir, then emit them
+// on stdout separated by ASCII RS (0x1e). parseGomu then filters mutants back down
+// to the changed files / line-ranges. The `&&` chain is fail-closed: gomu (v0.2.1)
+// exits 0 when mutants merely survive and non-zero only on real errors, so any failed
+// run aborts the chain and a partial result can never be scored as a full one.
 // timeoutSecs is gomu's PER-TEST timeout — deliberately NOT derived from
 // config.timeoutMs, which bounds the whole command; mapping one onto the other
 // would give per-test budgets that scale with suite size. Wire a dedicated
@@ -144,16 +143,8 @@ export function buildGomuCommand(
   timeoutSecs = 30,
   workers = 4,
 ): string {
-  const dirs = [
-    ...new Set(
-      sourceFiles.map((f) => {
-        const file = stripLineRange(f);
-        const slash = file.lastIndexOf("/");
-        return slash === -1 ? "." : file.slice(0, slash);
-      }),
-    ),
-  ];
-  const runs = dirs
+  const files = [...new Set(sourceFiles.map((f) => stripLineRange(f).trim()).filter(Boolean))];
+  const runs = files
     .map(
       (d, i) =>
         `rm -f .gomu_history.json && gomu run --output json --timeout ${timeoutSecs} --workers ${workers} ` +
