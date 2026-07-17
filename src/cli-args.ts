@@ -107,6 +107,7 @@ export function parseCliArgs(argv: string[]): {
   executionMode?: string;
   executionBackend?: string;
   equivalentSuppression?: string;
+  classifyEquivalent?: string;
   plugins?: string[];
   pluginDirs?: string[];
   reporters?: string[];
@@ -272,6 +273,13 @@ export function parseCliArgs(argv: string[]): {
   if (args["execution-backend"]) result.executionBackend = args["execution-backend"];
   if (args["equivalent-suppression"]) {
     result.equivalentSuppression = args["equivalent-suppression"];
+  }
+  if (args["classify-equivalent"]) {
+    const mode = args["classify-equivalent"];
+    if (!["off", "annotate", "suppress"].includes(mode)) {
+      throw new UsageError("Error: --classify-equivalent must be one of: off, annotate, suppress");
+    }
+    result.classifyEquivalent = mode;
   }
   const plugins = splitCommaList(args.plugin);
   if (plugins) result.plugins = plugins;

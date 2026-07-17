@@ -32,6 +32,16 @@ Each tool has a parser (`src/parsers/`) that normalizes its output into a common
 | `--allow-empty` | let a zero-mutant result pass — required for docs/test/fixtures-only diffs, which otherwise ERROR (never excuses a tool failure) |
 | `--report-file <path>` | also write the MutationResult JSON artifact (written before exit-code evaluation, so failing gates keep their evidence) |
 | `--threshold <0-1>` | minimum score; exit 2 below it |
+| `--classify-equivalent <off\|annotate\|suppress>` | stryker-net: flag likely-equivalent survivors (logging-only, attribute context) from the report's own source. `annotate` (default) tags them without changing the score; `suppress` drops them from the threshold. A `// marmorkrebs-ok[: reason]` in-source directive is authoritative and suppresses in any mode but `off` |
+
+**Equivalent mutants (#31):** a survivor that cannot change observable behaviour (e.g. a
+`StringLiteral` mutation on an unasserted `_logger.LogInformation("…")` call, or removal of that
+call) is a false gap, not a real one. `--classify-equivalent` recognises these conservatively from
+the mutation report's `source`. Fail-closed by design: the *heuristic* classes only change the
+score under explicit `suppress`, so an annotate-mode run never silently inflates a score; only a
+human `// marmorkrebs-ok` directive suppresses by default. An all-equivalent-suppressed run still
+trips the vacuous-run guard rather than passing 100%. (Roslyn-native AST classification belongs in
+the Stryker.NET fork; this is the self-contained, lane-extensible report-side classifier.)
 
 **Score formula (uniform across lanes, StrykerJS convention):**
 `score = (killed + timeout) / (killed + timeout + survived + noCoverage)` — a timeout IS

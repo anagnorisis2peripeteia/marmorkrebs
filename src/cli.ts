@@ -111,6 +111,10 @@ Options:
   --execution-backend <m>   stryker-cxx only: auto | source-overlay | mutant-switch | compiled-artifact | llvm-switch
   --equivalent-suppression <mode>
                             stryker-cxx only: off | conservative | aggressive
+  --classify-equivalent <mode>
+                            stryker-net: off | annotate | suppress (default annotate).
+                            Flags likely-equivalent survivors (logging-only, etc.);
+                            'suppress' or an in-source '// marmorkrebs-ok' drops them from the score.
   --plugin <path>           stryker-cxx only: plugin manifest path, repeatable via comma
   --plugin-dir <path>       stryker-cxx only: directory containing stryker-cxx-plugin.json
   --reporter <name>         stryker-cxx only: requested reporter, repeatable via comma
@@ -300,6 +304,7 @@ function main(): void {
     executionMode: opts.executionMode,
     executionBackend: opts.executionBackend,
     equivalentSuppression: opts.equivalentSuppression,
+    classifyEquivalent: opts.classifyEquivalent,
     plugins: opts.plugins,
     pluginDirs: opts.pluginDirs,
     reporters: opts.reporters,
