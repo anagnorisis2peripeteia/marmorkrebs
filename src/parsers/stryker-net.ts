@@ -1,11 +1,26 @@
 import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore } from "../types.js";
+import {
+  type EquivalentMode,
+  classifyEquivalentMutant,
+  normalizeEquivalentMode,
+  shouldSuppress,
+} from "../equivalent-mutants.js";
+
+export interface ParseStrykerNetOptions {
+  /** Equivalent-mutant classification mode (#31). Defaults to "annotate". */
+  classifyEquivalent?: string;
+}
 
 // Stryker.NET (`dotnet stryker`) emits the same mutation-testing-elements JSON schema as
 // StrykerJS (files -> mutants -> status), so parsing mirrors the stryker parser. Unlike
 // StrykerJS, the command writes the report to a file under StrykerOutput/, so
 // buildStrykerNetCommand cats that report to stdout for parsing here.
-export function parseStrykerNet(output: string): MutationResult {
+export function parseStrykerNet(output: string, opts: ParseStrykerNetOptions = {}): MutationResult {
+  const mode: EquivalentMode = normalizeEquivalentMode(opts.classifyEquivalent);
   const mutants: SurvivingMutant[] = [];
+  // Survivors the classifier removed from the score as equivalent (#31). Counted in
+  // totalMutants alongside `ignored`, never in `survived`, so the score reflects only real gaps.
+  const likelyEquivalentMutants: SurvivingMutant[] = [];
   let killed = 0;
   let survived = 0;
   let timeout = 0;
@@ -21,21 +36,45 @@ export function parseStrykerNet(output: string): MutationResult {
     const files = report.files ?? {};
 
     for (const [filePath, fileData] of Object.entries(files) as [string, any][]) {
+      // mutation-testing-elements reports carry the file's full source; split once and reuse for
+      // every survivor in this file. Absent source (minimal reports) => classifier is inert.
+      const sourceLines: string[] =
+        typeof fileData.source === "string" ? fileData.source.split(/\r?\n/) : [];
       for (const mutant of fileData.mutants ?? []) {
         switch (mutant.status) {
           case "Killed":
             killed++;
             break;
-          case "Survived":
-            survived++;
-            mutants.push({
+          case "Survived": {
+            const survivor: SurvivingMutant = {
               file: filePath,
               line: mutant.location?.start?.line ?? 0,
               mutator: mutant.mutatorName ?? "unknown",
               description: mutant.replacement ?? mutant.description ?? "survived mutant",
               status: "survived",
-            });
+            };
+            const classification =
+              mode === "off"
+                ? { equivalent: false, reason: null, manual: false }
+                : classifyEquivalentMutant(
+                    {
+                      mutator: survivor.mutator,
+                      startLine: mutant.location?.start?.line ?? 0,
+                      endLine: mutant.location?.end?.line,
+                    },
+                    sourceLines,
+                  );
+            if (shouldSuppress(classification, mode)) {
+              likelyEquivalentMutants.push({ ...survivor, likelyEquivalent: classification.reason ?? "equivalent" });
+            } else {
+              survived++;
+              if (classification.equivalent && classification.reason) {
+                survivor.likelyEquivalent = classification.reason;
+              }
+              mutants.push(survivor);
+            }
             break;
+          }
           case "Timeout":
             timeout++;
             break;
@@ -64,21 +103,25 @@ export function parseStrykerNet(output: string): MutationResult {
     };
   }
 
+  const likelyEquivalent = likelyEquivalentMutants.length;
   const scored = killed + survived + timeout + noCoverage;
-  const total = killed + survived + timeout + noCoverage + ignored;
+  // Suppressed-equivalent mutants count in the total (they were generated) but not in `scored`,
+  // exactly like `ignored`. So a run whose ONLY mutants were suppressed-equivalent still trips
+  // the vacuous guard below rather than scoring a false pass — no silent fail-open via #31.
+  const total = scored + ignored + likelyEquivalent;
   if (total > 0 && scored === 0) {
-    // Every mutant Ignored = the mutate filter matched nothing; scoring this as a
-    // vacuous 1.0 is exactly how a mis-rooted glob passes a gate silently.
+    // Every mutant Ignored/suppressed = nothing was actually scored; a vacuous 1.0 here is
+    // exactly how a mis-rooted glob (or an all-equivalent sweep) passes a gate silently.
     return {
       ...EMPTY_RESULT,
       tool: "stryker-net",
-      error: `all ${total} mutants were Ignored — --mutate patterns likely matched nothing (glob resolution root mismatch)`,
+      error: `all ${total} mutants were Ignored/suppressed — nothing was scored (--mutate patterns matched nothing, or every survivor was classified equivalent)`,
     };
   }
 
   return {
     tool: "stryker-net",
-    totalMutants: killed + survived + timeout + noCoverage + ignored,
+    totalMutants: total,
     killed,
     survived,
     timeout,
@@ -86,6 +129,7 @@ export function parseStrykerNet(output: string): MutationResult {
     ignored,
     score: mutationScore(killed, timeout, survived, noCoverage),
     survivingMutants: mutants,
+    ...(likelyEquivalent > 0 ? { likelyEquivalent, likelyEquivalentMutants } : {}),
     error: null,
     elapsedMs: 0,
   };

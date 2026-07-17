@@ -104,6 +104,80 @@ describe("mutate glob anchoring and vacuous-ignore guard", () => {
   });
 });
 
+describe("equivalent-mutant classification (#31)", () => {
+  // A report WITH source (mutation-testing-elements carries it) so the classifier can inspect
+  // the mutated span. Line 3 is a bare, result-discarded logger call — a StringLiteral survivor
+  // there is logging-only (message not asserted).
+  const loggerSource =
+    "public void DoThing()\n{\n    _logger.LogInformation(\"starting thing\");\n    Compute();\n}";
+  const reportWith = (mutants: unknown[], source = loggerSource) =>
+    JSON.stringify({ files: { "src/Thing.cs": { source, mutants } } });
+
+  const loggerSurvivor = {
+    status: "Survived",
+    mutatorName: "StringLiteral",
+    location: { start: { line: 3 }, end: { line: 3 } },
+  };
+  const killed = { status: "Killed", mutatorName: "ArithmeticOperator", location: { start: { line: 4 } } };
+
+  it("annotates (default) a logging-only survivor without changing the score", () => {
+    const r = parseStrykerNet(reportWith([killed, loggerSurvivor]));
+    assert.equal(r.survived, 1, "still counted in annotate mode — no silent score inflation");
+    assert.equal(r.score, 0.5); // 1 killed / (1 killed + 1 survived)
+    assert.equal(r.likelyEquivalent, undefined, "nothing suppressed in annotate mode");
+    assert.match(r.survivingMutants[0].likelyEquivalent ?? "", /^logging-only:/);
+  });
+
+  it("suppress mode removes the logging-only survivor from the score", () => {
+    const r = parseStrykerNet(reportWith([killed, loggerSurvivor]), { classifyEquivalent: "suppress" });
+    assert.equal(r.survived, 0);
+    assert.equal(r.score, 1); // survivor no longer counts against the threshold
+    assert.equal(r.likelyEquivalent, 1);
+    assert.equal(r.likelyEquivalentMutants?.length, 1);
+    assert.match(r.likelyEquivalentMutants?.[0].likelyEquivalent ?? "", /logging-only/);
+    assert.equal(r.survivingMutants.length, 0);
+    assert.equal(r.totalMutants, 2, "suppressed mutant still counts in the total, like ignored");
+  });
+
+  it("off mode disables classification entirely", () => {
+    const r = parseStrykerNet(reportWith([killed, loggerSurvivor]), { classifyEquivalent: "off" });
+    assert.equal(r.survived, 1);
+    assert.equal(r.score, 0.5);
+    assert.equal(r.survivingMutants[0].likelyEquivalent, undefined);
+  });
+
+  it("honours an in-source `// marmorkrebs-ok` directive even in the default annotate mode", () => {
+    const src = "void M()\n{\n    x = compute(); // marmorkrebs-ok: known equivalent\n}";
+    const manualSurvivor = {
+      status: "Survived",
+      mutatorName: "ArithmeticOperator",
+      location: { start: { line: 3 }, end: { line: 3 } },
+    };
+    const r = parseStrykerNet(reportWith([killed, manualSurvivor], src));
+    assert.equal(r.survived, 0, "a human directive is authoritative in any mode except off");
+    assert.equal(r.likelyEquivalent, 1);
+    assert.match(r.likelyEquivalentMutants?.[0].likelyEquivalent ?? "", /manual-suppression/);
+  });
+
+  it("leaves a genuine (non-equivalent) survivor counted under suppress", () => {
+    const realSurvivor = {
+      status: "Survived",
+      mutatorName: "EqualityOperator",
+      location: { start: { line: 4 }, end: { line: 4 } }, // Compute(); — not a logger call
+    };
+    const r = parseStrykerNet(reportWith([killed, realSurvivor]), { classifyEquivalent: "suppress" });
+    assert.equal(r.survived, 1);
+    assert.equal(r.likelyEquivalent, undefined);
+    assert.equal(r.survivingMutants[0].likelyEquivalent, undefined);
+  });
+
+  it("does not fail open: an all-equivalent-suppressed run trips the vacuous guard, not a 1.0 pass", () => {
+    const r = parseStrykerNet(reportWith([loggerSurvivor]), { classifyEquivalent: "suppress" });
+    assert.notEqual(r.error, null);
+    assert.match(r.error ?? "", /nothing was scored/);
+  });
+});
+
 describe("stryker-net exit-code and cleanup chain", () => {
   it("preserves the runner exit code and removes output dirs after cat", () => {
     const cmd = buildStrykerNetCommand(["Lib/Calc.cs"], "/repo");

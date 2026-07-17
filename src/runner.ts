@@ -818,7 +818,8 @@ function parseOutput(
     case "stryker":
       return parseStryker(stdout);
     case "stryker-net":
-      return parseStrykerNet(stdout);
+      // #31: classify equivalent survivors (logging-only, etc.) from the report's own source.
+      return parseStrykerNet(stdout, { classifyEquivalent: config.classifyEquivalent });
     case "cargo-mutants":
       // --file scopes files natively; line ranges are honored parser-side.
       return parseCargoMutants(stdout, sourceFiles);

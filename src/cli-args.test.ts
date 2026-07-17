@@ -46,6 +46,15 @@ describe("parseCliArgs", () => {
       UsageError,
     );
   });
+
+  it("parses --classify-equivalent and rejects an invalid mode (#31)", () => {
+    assert.equal(parseCliArgs(argv("--tool", "stryker-net", "--classify-equivalent", "suppress")).classifyEquivalent, "suppress");
+    assert.equal(parseCliArgs(argv("--tool", "stryker-net")).classifyEquivalent, undefined);
+    assert.throws(
+      () => parseCliArgs(argv("--tool", "stryker-net", "--classify-equivalent", "bogus")),
+      UsageError,
+    );
+  });
 });
 
 describe("scope-lines and exclude-mutations flags", () => {

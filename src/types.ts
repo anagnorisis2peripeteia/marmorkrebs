@@ -107,6 +107,14 @@ export interface MutationConfig {
   executionMode?: string;
   executionBackend?: string;
   equivalentSuppression?: string;
+  /**
+   * marmorkrebs-native equivalent-mutant classification (#31): "off" | "annotate" | "suppress".
+   * Distinct from `equivalentSuppression`, which is a stryker-cxx binary passthrough. Default
+   * "annotate": flag likely-equivalent survivors without changing the score; "suppress" also
+   * removes heuristic matches from the threshold. A `// marmorkrebs-ok` directive suppresses in
+   * any mode except "off". Wired for the stryker-net lane today (report carries source).
+   */
+  classifyEquivalent?: string;
   plugins?: string[];
   pluginDirs?: string[];
   reporters?: string[];
@@ -136,6 +144,13 @@ export interface SurvivingMutant {
   mutator: string;
   description: string;
   status: "survived" | "timeout" | "no_coverage";
+  /**
+   * Set when the equivalent-mutant classifier (#31) flagged this survivor as very likely
+   * equivalent but it is STILL counted (annotate mode / heuristic match). Carries the reason,
+   * e.g. "logging-only: message string not asserted". Suppressed survivors don't appear here —
+   * they move to MutationResult.likelyEquivalentMutants and out of the score.
+   */
+  likelyEquivalent?: string;
 }
 
 export interface MutationResult {
@@ -148,6 +163,14 @@ export interface MutationResult {
   ignored: number;
   score: number;
   survivingMutants: SurvivingMutant[];
+  /**
+   * Count of survivors the classifier (#31) removed from the score as equivalent (suppress
+   * mode, or an authoritative `// marmorkrebs-ok` directive). Excluded from `survived`, counted
+   * in `totalMutants` alongside `ignored` so an all-equivalent run still fails the vacuous guard.
+   */
+  likelyEquivalent?: number;
+  /** The suppressed survivors, each carrying its reason in `likelyEquivalent`. Present only when non-empty. */
+  likelyEquivalentMutants?: SurvivingMutant[];
   thresholds?: {
     high: number;
     low: number;
