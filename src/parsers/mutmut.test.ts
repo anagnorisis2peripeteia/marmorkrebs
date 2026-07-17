@@ -57,8 +57,9 @@ describe("buildMutmutCommand", () => {
   it("rebuilds source_paths in a temporary scoped setup.cfg for changed py files", () => {
     const cmd = buildMutmutCommand(["calclib/tested.py:3-6"], "/repo");
     assert.ok(cmd.startsWith("cd '/repo' && rm -rf mutants && "));
-    assert.ok(cmd.includes("printf \"[mutmut]"));
-    assert.ok(cmd.includes("source_paths = [\"calclib/tested.py\"]"));
+    assert.ok(cmd.includes("python3 - <<'PY'"));
+    assert.ok(cmd.includes("parser['mutmut']['source_paths']"));
+    assert.ok(cmd.includes("source_paths'] ="));
     assert.ok(cmd.includes("mutmut results --all true"));
     assert.ok(cmd.includes("mutmut run 1>&2"));
     assert.ok(cmd.includes("cp setup.cfg"));
@@ -71,6 +72,7 @@ describe("buildMutmutCommand", () => {
       ["plugins/issue-loop/scripts/issue_loop.py:1", "plugins/issue-loop/scripts/issue_loop.py:10", "other.py"],
       "/repo",
     );
-    assert.ok(cmd.includes("source_paths = [\"plugins/issue-loop/scripts/issue_loop.py\", \"other.py\"]"));
+    assert.ok(cmd.includes("json.loads"));
+    assert.ok(cmd.includes("for p in paths"));
   });
 });
