@@ -54,11 +54,23 @@ describe("parseMutmut (mutmut 3 results lines)", () => {
 });
 
 describe("buildMutmutCommand", () => {
-  it("scrubs the mutants dir around the run and propagates the run exit code", () => {
-    const cmd = buildMutmutCommand(["calclib/tested.py"], "/repo");
+  it("rebuilds source_paths in a temporary scoped setup.cfg for changed py files", () => {
+    const cmd = buildMutmutCommand(["calclib/tested.py:3-6"], "/repo");
     assert.ok(cmd.startsWith("cd '/repo' && rm -rf mutants && "));
-    assert.ok(cmd.includes("mutmut run 1>&2"));
+    assert.ok(cmd.includes("printf \"[mutmut]"));
+    assert.ok(cmd.includes("source_paths = [\"calclib/tested.py\"]"));
     assert.ok(cmd.includes("mutmut results --all true"));
-    assert.ok(cmd.endsWith("rm -rf mutants; exit $code"));
+    assert.ok(cmd.includes("mutmut run 1>&2"));
+    assert.ok(cmd.includes("cp setup.cfg"));
+    assert.ok(cmd.includes("mv \"$backup\" setup.cfg"));
+    assert.ok(cmd.includes("rm -f setup.cfg"));
+  });
+
+  it("dedupes source files and keeps each file only once in the scoped config", () => {
+    const cmd = buildMutmutCommand(
+      ["plugins/issue-loop/scripts/issue_loop.py:1", "plugins/issue-loop/scripts/issue_loop.py:10", "other.py"],
+      "/repo",
+    );
+    assert.ok(cmd.includes("source_paths = [\"plugins/issue-loop/scripts/issue_loop.py\", \"other.py\"]"));
   });
 });
