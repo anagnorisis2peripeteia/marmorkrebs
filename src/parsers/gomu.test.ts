@@ -180,12 +180,14 @@ describe("parseGomu multi-report stream", () => {
 });
 
 describe("buildGomuCommand", () => {
-  it("runs gomu once per unique package dir with a single positional each", () => {
+  it("runs gomu once per unique file with a single positional each", () => {
     const cmd = buildGomuCommand(["a.go", "pkg/b.go", "pkg/c.go"], "/repo");
-    assert.equal(cmd.match(/gomu run /g)?.length, 2);
-    assert.ok(cmd.includes("'.' 1>&2"));
-    assert.ok(cmd.includes("'pkg' 1>&2"));
-    assert.ok(!cmd.includes("'a.go'"), "must pass package dirs, not files");
+    assert.equal(cmd.match(/gomu run /g)?.length, 3);
+    assert.ok(cmd.includes("'a.go' 1>&2"));
+    assert.ok(cmd.includes("'pkg/b.go' 1>&2"));
+    assert.ok(cmd.includes("'pkg/c.go' 1>&2"));
+    assert.ok(!cmd.includes("'.' 1>&2"));
+    assert.ok(!cmd.includes("'pkg' 1>&2"));
     assert.ok(cmd.startsWith("cd '/repo' && "));
   });
 
@@ -206,8 +208,14 @@ describe("buildGomuCommand", () => {
 
   it("strips focus line-range suffixes when deriving dirs", () => {
     const cmd = buildGomuCommand(["pkg/a.go:12-40"], "/repo");
-    assert.ok(cmd.includes("'pkg' 1>&2"));
+    assert.ok(cmd.includes("'pkg/a.go' 1>&2"));
     assert.ok(!cmd.includes("12-40"));
+  });
+
+  it("dedupes duplicate file paths after stripping line-range suffixes", () => {
+    const cmd = buildGomuCommand(["pkg/a.go:1-3", "pkg/a.go:7-9"], "/repo");
+    assert.equal(cmd.match(/gomu run /g)?.length, 1);
+    assert.ok(cmd.includes("'pkg/a.go' 1>&2"));
   });
 });
 
