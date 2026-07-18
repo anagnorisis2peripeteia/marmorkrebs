@@ -60,6 +60,32 @@ project passes `node scripts/validate-provider.mjs <tool>` against the real bina
 parser unit tests alone cannot detect a wrong CLI flag or a report written to disk
 instead of stdout (that is exactly how the gomu lane shipped broken).
 
+## Hunt mode — whole-repo survivor discovery (#36)
+
+The gate answers "did the tests a PR *added* kill mutants on the lines it *touched*". **Hunt**
+answers "where in *existing* code do mutants survive" — latent **test-debt** discovery, independent
+of a diff. A surviving mutant on covered code is a concrete, already-proven "there is a bug-shaped
+edit here that no test catches".
+
+```
+marmorkrebs hunt --dir <path> --tool <tool> [--scope <module>] [--max-findings <n>] [--include-no-coverage]
+```
+
+- Sweeps every source file under `--scope` (default: whole repo; **pass `--scope <module>` on a
+  large target — whole-repo mutation is `O(mutants × suite-runtime)`**), runs the same lane, and
+  emits a `HuntReport` (not a gate verdict — no pass/fail threshold; exit 0 on a clean sweep, 1 on a
+  lane error).
+- **Ranked by blast radius:** survivors in widely-referenced files (a centrality proxy) outrank
+  survivors in rarely-reached leaves.
+- **Equivalent-aware:** survivors the #31 classifier flags (logging-only, etc.) are filtered out of
+  the ranked findings so the output isn't polluted; `--include-no-coverage` adds a secondary
+  coverage-gap tier.
+- Fail-closed: a lane error is reported as an error and never as a clean bill of health.
+
+This is the deterministic pre-filter. The LLM test-authoring + prove stages (author a test that
+*kills* each high-value survivor, then prove it passes on HEAD **and** kills the mutant) live in the
+`marmorkrebs-hunt` skill, which consumes this report.
+
 ### C++ / ObjC++ / Metal
 
 Marmorkrebs delegates C++/ObjC++/Metal mutation to external engines.

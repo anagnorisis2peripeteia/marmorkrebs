@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { getChangedFilesFromGit, getChangedLineRangesFromGit } from "./git-changed-files.js";
 import { runMutationAnalysis } from "./runner.js";
 import type { CrabboxLeaseOptions, MutationConfig, MutationTool } from "./types.js";
 import { parseCliArgs, TOOLS, UsageError } from "./cli-args.js";
+import { buildHuntReport, formatHuntReport, gatherHuntFiles } from "./hunt.js";
 
 
 
@@ -16,6 +17,17 @@ Usage:
   marmorkrebs --dir <path> --tool <tool> --changed-files <file,...> [options]
   marmorkrebs --dir <path> --tool <tool> --base <ref> [options]
   marmorkrebs --repo <owner/repo> --pr <number> --tool <tool> [options]
+  marmorkrebs hunt --dir <path> --tool <tool> [--scope <module>] [options]
+
+Subcommands:
+  hunt                      whole-repo/module survivor discovery (#36): sweep EXISTING code for
+                            surviving mutants (latent test-debt), ranked by blast radius, with
+                            likely-equivalent survivors (#31) filtered out. Emits a HuntReport,
+                            not a gate verdict. Scope with --scope <module> — whole-repo mutation
+                            is O(mutants x suite-runtime). Hunt options:
+                              --scope <path>            module/dir to hunt (default: whole repo)
+                              --max-findings <n>        cap ranked survivor findings
+                              --include-no-coverage     also report no-coverage mutants (2nd tier)
 
 Options:
   --dir <path>              Local checkout directory
@@ -195,6 +207,25 @@ function main(): void {
   }
 
   let changedFiles = opts.changedFiles;
+  // hunt mode (#36): discovery over a whole scope, NOT a diff. Gather every source file under the
+  // scope and feed it to the SAME lane; the diff-derivation paths below are skipped (changedFiles
+  // is now set). Scope defaults to the whole repo — but whole-repo mutation is O(mutants x suite),
+  // so the caller is expected to pass --scope <module> on a large target.
+  if (opts.hunt) {
+    const scopeDir = opts.scope ? resolve(repoDir, opts.scope) : repoDir;
+    if (!existsSync(scopeDir)) {
+      console.error(`Error: hunt scope does not exist: ${scopeDir}`);
+      process.exit(1);
+    }
+    changedFiles = gatherHuntFiles(repoDir, scopeDir, opts.tool);
+    console.error(
+      `[marmorkrebs hunt] scope=${relative(repoDir, scopeDir) || "."} gathered ${changedFiles.length} source file(s)`,
+    );
+    if (!changedFiles.length) {
+      console.error("Error: no source files under hunt scope (check --scope and --tool)");
+      process.exit(1);
+    }
+  }
   if (!changedFiles && opts.repo && opts.pr) {
     try {
       changedFiles = getChangedFilesFromPR(opts.repo, opts.pr);
@@ -336,6 +367,35 @@ function main(): void {
   console.error(`[marmorkrebs] tool=${config.tool} files=${changedFiles.length} ${execTarget}`);
 
   const result = runMutationAnalysis(repoDir, changedFiles, config);
+
+  // hunt mode: emit a ranked, equivalent-aware HuntReport instead of a gate verdict. Discovery has
+  // no pass/fail threshold — exit 0 on a clean sweep, 1 only on a real lane error.
+  if (opts.hunt) {
+    const report = buildHuntReport(
+      result,
+      changedFiles,
+      {
+        scope: opts.scope ?? ".",
+        filesSwept: changedFiles.length,
+        includeNoCoverage: opts.includeNoCoverage,
+        maxFindings: opts.maxFindings,
+      },
+      (file) => {
+        try {
+          return readFileSync(join(repoDir, file), "utf8");
+        } catch {
+          return null;
+        }
+      },
+    );
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+    if (opts.reportFile) {
+      writeFileSync(opts.reportFile, JSON.stringify(report, null, 2) + "\n");
+      console.error(`[marmorkrebs] hunt report written to ${opts.reportFile}`);
+    }
+    console.error(formatHuntReport(report));
+    process.exit(report.error ? 1 : 0);
+  }
 
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 
