@@ -129,6 +129,11 @@ export function parseCliArgs(argv: string[]): {
   skipSync?: boolean;
   remoteDir?: string;
   crabbox?: CrabboxLeaseOptions;
+  // hunt mode (#36): whole-repo/module survivor discovery instead of the diff-scoped gate.
+  hunt?: boolean;
+  scope?: string;
+  maxFindings?: number;
+  includeNoCoverage?: boolean;
 } {
   const BOOLEAN_FLAGS = new Set([
     "allow-empty",
@@ -142,6 +147,7 @@ export function parseCliArgs(argv: string[]): {
     "clear-baseline",
     "batch-mutants",
     "retain-worktrees",
+    "include-no-coverage",
   ]);
   const args: Record<string, string> = {};
   for (let i = 2; i < argv.length; i++) {
@@ -325,6 +331,12 @@ export function parseCliArgs(argv: string[]): {
   if ("scope-lines" in args) result.scopeLines = true;
   if (args["exclude-mutations"]) result.excludeMutations = splitCommaList(args["exclude-mutations"]);
   if (args["remote-dir"]) result.remoteDir = args["remote-dir"];
+  // hunt subcommand: `marmorkrebs hunt --tool <t> --dir <d> [--scope <path>] ...`. The token sits at
+  // argv[2] (before the `--` flags), which the flag loop above ignores, so detect it explicitly.
+  if (argv[2] === "hunt") result.hunt = true;
+  if (args.scope) result.scope = args.scope;
+  if (args["max-findings"] !== undefined) result.maxFindings = parseInt(args["max-findings"], 10);
+  if ("include-no-coverage" in args) result.includeNoCoverage = true;
   if (args.provider) {
     result.crabbox = { provider: args.provider };
     if (args.image) result.crabbox.image = args.image;
