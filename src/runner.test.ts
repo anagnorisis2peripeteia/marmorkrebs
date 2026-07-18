@@ -3,12 +3,38 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finalizeStrykerNetGroups, findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
+import { finalizeStrykerNetGroups, findMutationReport, findStrykerNetTestProject, reconcileResult, runMutationAnalysis } from "./runner.js";
 import { EMPTY_RESULT, type MutationConfig, type MutationResult } from "./types.js";
 
 function result(overrides: Partial<MutationResult>): MutationResult {
   return { ...EMPTY_RESULT, tool: "gomu", error: null, ...overrides };
 }
+
+describe("findMutationReport (Node report locator — replaces the shell find|cat)", () => {
+  it("finds a mutation-report.json under a reports/ subtree", () => {
+    const root = mkdtempSync(join(tmpdir(), "mk-report-"));
+    try {
+      mkdirSync(join(root, "reports"), { recursive: true });
+      writeFileSync(join(root, "reports", "mutation-report.json"), "{}");
+      const found = findMutationReport(root);
+      assert.ok(found && found.replace(/\\/g, "/").endsWith("reports/mutation-report.json"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns null when there is no report (fail-closed: parser then errors on empty)", () => {
+    const root = mkdtempSync(join(tmpdir(), "mk-report-"));
+    try {
+      mkdirSync(join(root, "logs"), { recursive: true });
+      writeFileSync(join(root, "logs", "other.json"), "{}");
+      assert.equal(findMutationReport(root), null); // not under reports/, not the report name
+      assert.equal(findMutationReport(join(root, "does-not-exist")), null);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 const OK_EXEC = { exitCode: 0, signal: null, spawnError: null, stderr: "" };
 

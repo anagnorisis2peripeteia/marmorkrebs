@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import {
   crabboxCleanup,
@@ -15,6 +15,7 @@ import {
   buildGomuCommand,
   buildMutmutCommand,
   buildStrykerCommand,
+  buildStrykerNetArgs,
   buildStrykerNetCommand,
   parseCargoMutants,
   parseCxxSource,
@@ -424,6 +425,32 @@ export function finalizeStrykerNetGroups(
   };
 }
 
+// Locate the Stryker.NET json report under an output dir (its json reporter writes
+// `<output>/reports/mutation-report.json`). Replaces the old shell `find … -name mutation-report.json
+// -path '*reports*' | sort | tail -1` — done in Node so the local lane needs no shell at all.
+export function findMutationReport(dir: string): string | null {
+  if (!existsSync(dir)) return null;
+  const matches: string[] = [];
+  const walk = (d: string): void => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile() && e.name === "mutation-report.json" && p.replace(/\\/g, "/").includes("reports")) {
+        matches.push(p);
+      }
+    }
+  };
+  walk(dir);
+  matches.sort();
+  return matches.length ? matches[matches.length - 1] : null;
+}
+
 function runStrykerNetInProjectGroups(
   repoDir: string,
   sourceFiles: string[],
@@ -455,14 +482,38 @@ function runStrykerNetInProjectGroups(
     if (!scopedFiles.length) continue;
 
     const displayDir = projectDir === repoDir ? "<repo-root>" : relative(repoDir, projectDir);
-    const command = buildStrykerNetCommand(scopedFiles, projectDir, testProject);
-    const result = spawnSync("bash", ["-c", command], {
-      cwd: repoDir,
+    // Spawn `dotnet` DIRECTLY (no shell) — a `bash -c` wrapper let git-bash's MSYS mangle the
+    // path/glob args on Windows and Stryker.NET crashed before writing a report. The scrub /
+    // report-read / cleanup that used to be the `rm -rf … && … | cat` shell parts run here in Node.
+    const { args, outputDir } = buildStrykerNetArgs(scopedFiles, testProject);
+    const outDir = join(projectDir, outputDir);
+    const strykerOutput = join(projectDir, "StrykerOutput");
+    // Scrub-FIRST: a crashed prior run's leftover report must never be read by a failed run (the
+    // stale-report fail-open class — regression-locked in runner.test.ts for the shell lane).
+    rmSync(outDir, { recursive: true, force: true });
+    rmSync(strykerOutput, { recursive: true, force: true });
+    const dotnetBin = process.platform === "win32" ? "dotnet.exe" : "dotnet";
+    const command = `${dotnetBin} ${args.join(" ")}`;
+    const result = spawnSync(dotnetBin, args, {
+      cwd: projectDir,
       encoding: "utf8" as const,
       timeout: timeoutMs,
       maxBuffer: 64 * 1024 * 1024,
     });
-    const parsed = parseOutput(config, result.stdout ?? "", result.stderr ?? "", scopedFiles);
+    // Read the report from disk (Stryker's json reporter writes a file, never stdout); freshness is
+    // guaranteed by the scrub-first above. Then clean the output dirs (validator artifact-hygiene).
+    let reportJson = "";
+    const reportPath = findMutationReport(outDir) ?? findMutationReport(strykerOutput);
+    if (reportPath) {
+      try {
+        reportJson = readFileSync(reportPath, "utf8");
+      } catch {
+        // fall through to the empty-report parse error below (fail-closed)
+      }
+    }
+    rmSync(outDir, { recursive: true, force: true });
+    rmSync(strykerOutput, { recursive: true, force: true });
+    const parsed = parseOutput(config, reportJson, result.stderr ?? "", scopedFiles);
     const reconciled = reconcileResult(
       parsed,
       {

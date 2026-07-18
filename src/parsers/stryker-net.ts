@@ -175,3 +175,32 @@ export function buildStrykerNetCommand(
 function shellEscape(s: string): string {
   return s.replace(/'/g, "'\\''");
 }
+
+/**
+ * The SAME `dotnet stryker` invocation as buildStrykerNetCommand, but as an argv array with NO
+ * shell wrapping — for the LOCAL lane, which spawns `dotnet` directly (no `bash -c`).
+ *
+ * Why: on Windows the local runner ran the shell command via `bash -c`, and git-bash's MSYS layer
+ * REWRITES POSIX-looking argument values (the `--test-project ../../tests/…` path and the
+ * double-star mutate globs) into mangled Windows paths, so Stryker.NET received garbage and crashed
+ * before writing a report ("No JSON output" in 3s). Spawning `dotnet` with an argv array and no
+ * shell means no bash, no MSYS, no cmd — the exact args reach the tool on every platform.
+ * Scrub-first, report-read, and cleanup move into the Node runner (the old `rm`/`find`/`cat` parts).
+ * buildStrykerNetCommand stays for the CRABBOX lane, which runs on a Linux box where POSIX is fine.
+ */
+export function buildStrykerNetArgs(
+  sourceFiles: string[],
+  testProject?: string,
+): { args: string[]; outputDir: string } {
+  const outputDir = ".marmorkrebs-stryker";
+  const args: string[] = ["stryker"];
+  for (const f of sourceFiles) {
+    const pattern = f.replace(/:\d+(?:-\d+)?$/, ""); // strip line-range (Stryker.NET has no ranges)
+    // '**/'-anchor so a repo-relative path matches regardless of the project-relative resolution
+    // root (issue #14/#28); forward slashes are what git and Stryker.NET both speak.
+    args.push("--mutate", pattern.startsWith("**/") ? pattern : `**/${pattern}`);
+  }
+  if (testProject) args.push("--test-project", testProject);
+  args.push("--reporter", "json", "--output", outputDir);
+  return { args, outputDir };
+}
