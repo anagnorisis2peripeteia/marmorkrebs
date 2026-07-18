@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildStrykerNetCommand, parseStrykerNet } from "./stryker-net.js";
+import { buildStrykerNetArgs, buildStrykerNetCommand, parseStrykerNet } from "./stryker-net.js";
 
 describe("parseStrykerNet", () => {
   it("parses Stryker.NET mutation-report.json", () => {
@@ -175,6 +175,37 @@ describe("equivalent-mutant classification (#31)", () => {
     const r = parseStrykerNet(reportWith([loggerSurvivor]), { classifyEquivalent: "suppress" });
     assert.notEqual(r.error, null);
     assert.match(r.error ?? "", /nothing was scored/);
+  });
+});
+
+describe("buildStrykerNetArgs (direct-spawn argv — Windows MSYS fix)", () => {
+  it("emits **/-anchored --mutate patterns with NO shell quoting", () => {
+    const { args } = buildStrykerNetArgs(["Lib/Calc.cs", "**/Other.cs"]);
+    assert.deepEqual(args.slice(0, 4), ["stryker", "--mutate", "**/Lib/Calc.cs", "--mutate"]);
+    assert.ok(args.includes("**/Other.cs"), "already-anchored patterns are left as-is");
+    // no single quotes anywhere — the whole point is that there is no shell to quote for
+    assert.ok(!args.some((a) => a.includes("'")), "no shell quoting in argv-mode");
+  });
+
+  it("strips line ranges (Stryker.NET has no range support)", () => {
+    const { args } = buildStrykerNetArgs(["Lib/Calc.cs:5-9"]);
+    assert.ok(args.includes("**/Lib/Calc.cs"));
+    assert.ok(!args.some((a) => a.includes("5-9")));
+  });
+
+  it("passes --test-project as its own argv token when given, omits it otherwise", () => {
+    const withTp = buildStrykerNetArgs(["A.cs"], "../../tests/A.Tests/A.Tests.csproj").args;
+    const i = withTp.indexOf("--test-project");
+    assert.ok(i >= 0 && withTp[i + 1] === "../../tests/A.Tests/A.Tests.csproj");
+    assert.ok(!buildStrykerNetArgs(["A.cs"]).args.includes("--test-project"));
+  });
+
+  it("requests the json reporter into the marmorkrebs output dir", () => {
+    const { args, outputDir } = buildStrykerNetArgs(["A.cs"]);
+    assert.equal(outputDir, ".marmorkrebs-stryker");
+    const r = args.indexOf("--reporter");
+    assert.equal(args[r + 1], "json");
+    assert.equal(args[args.indexOf("--output") + 1], ".marmorkrebs-stryker");
   });
 });
 
