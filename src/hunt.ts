@@ -20,7 +20,7 @@
 // module never widens it.
 
 import { readdirSync } from "node:fs";
-import { basename, extname, join, relative } from "node:path";
+import { basename, extname, join, relative, sep } from "node:path";
 import { filterSourceFiles } from "./runner.js";
 import type { MutationResult, MutationTool, SurvivingMutant } from "./types.js";
 
@@ -76,7 +76,11 @@ function walk(dir: string, repoDir: string, acc: string[]): void {
       if (SKIP_DIRS.has(entry.name)) continue;
       walk(join(dir, entry.name), repoDir, acc);
     } else if (entry.isFile()) {
-      acc.push(relative(repoDir, join(dir, entry.name)));
+      // Normalise to forward-slash repo-relative paths on every platform: git, the lanes'
+      // --mutate globs, and the runner's filterSourceFiles/isTestFile rules all speak "/". On
+      // Windows relative() returns backslashes, which would (a) leak test files past the "/tests/"
+      // exclusion and (b) produce malformed mutate globs — a real bug on the cwin stryker-net run.
+      acc.push(relative(repoDir, join(dir, entry.name)).split(sep).join("/"));
     }
   }
 }
