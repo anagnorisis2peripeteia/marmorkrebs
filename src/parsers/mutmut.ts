@@ -6,11 +6,13 @@ import { EMPTY_RESULT, type MutationResult, type SurvivingMutant, mutationScore 
 // a non-zero exit that reconcileResult turns into a gate error). There is no JSON
 // results output; `mutmut results --all true` prints one line per mutant:
 //     <module.path>.x_<function>__mutmut_<n>: <status>
+// or, for class methods in newer 3.6 output:
+//     <module.path>.xǁ<Class>ǁ<method>____mutmut_<n>: <status>
 // with statuses killed / survived / no tests / timeout / suspicious / skipped /
 // segfault / not checked. The module path maps back to a file (dots -> slashes + .py).
 // mutmut mutates everything under source_paths, so parseMutmut filters mutants down to
 // the changed files and recomputes counts from the filtered lines.
-const STATUS_LINE = /^\s+([\w.-]+)\.x_(\w+?)__mutmut_(\d+): (.+)$/;
+const STATUS_LINE = /^\s+([\w.-]+)\.x(.+?)__mutmut_(\d+): (.+)$/;
 
 function moduleToFile(modulePath: string): string {
   return `${modulePath.replace(/\./g, "/")}.py`;
@@ -31,7 +33,8 @@ export function parseMutmut(output: string, changedFiles: string[] = []): Mutati
   for (const line of output.split("\n")) {
     const m = line.match(STATUS_LINE);
     if (!m) continue;
-    const [, modulePath, func, index, status] = m;
+    const [, modulePath, rawFunc, index, status] = m;
+    const func = rawFunc.replace(/^_/, "").replaceAll("ǁ", ".").replace(/^\./, "");
     const file = moduleToFile(modulePath);
     if (wanted.length && !wanted.some((cf) => cf === file || cf.endsWith(`/${file}`) || file.endsWith(`/${cf}`))) {
       continue;
@@ -92,7 +95,7 @@ export function parseMutmut(output: string, changedFiles: string[] = []): Mutati
   };
 }
 
-export function buildMutmutCommand(sourceFiles: string[], workDir: string): string {
+export function buildMutmutCommand(sourceFiles: string[], workDir: string, testCommand?: string): string {
   const scopedFiles = Array.from(
     new Set(
       sourceFiles
@@ -112,11 +115,13 @@ export function buildMutmutCommand(sourceFiles: string[], workDir: string): stri
   return (
     `cd '${wd}' && rm -rf mutants && backup=$(mktemp) && has_setup_cfg=0; ` +
     `if [ -f setup.cfg ]; then has_setup_cfg=1; cp setup.cfg \"$backup\"; fi; ` +
-    `export MUTMUT_SOURCE_PATHS=${shellEscape(sourcePaths)}; ` +
+    `export MUTMUT_SOURCE_PATHS='${shellEscape(sourcePaths)}'; ` +
+    `export MUTMUT_TEST_COMMAND='${shellEscape(testCommand ?? "")}'; ` +
     `python3 - <<'PY'\n` +
     `import configparser\n` +
     `import json\n` +
     `import os\n` +
+    `import shlex\n` +
     `from pathlib import Path\n\n` +
     `cfg = Path('setup.cfg')\n` +
     `paths = json.loads(os.environ['MUTMUT_SOURCE_PATHS'])\n` +
@@ -125,10 +130,25 @@ export function buildMutmutCommand(sourceFiles: string[], workDir: string): stri
     `    parser.read_file(cfg.open())\n` +
     `if not parser.has_section('mutmut'):\n` +
     `    parser['mutmut'] = {}\n` +
-    `parser['mutmut']['source_paths'] = '[' + ', '.join(repr(p) for p in paths) + ']'\n` +
+    `parser['mutmut']['source_paths'] = '\\n'.join(paths)\n` +
+    `test_command = os.environ['MUTMUT_TEST_COMMAND'].strip()\n` +
+    `if test_command:\n` +
+    `    argv = shlex.split(test_command)\n` +
+    `    executable = Path(argv[0]).name if argv else ''\n` +
+    `    if executable.startswith('python') and argv[1:3] == ['-m', 'pytest']:\n` +
+    `        pytest_args = argv[3:]\n` +
+    `    elif executable in {'pytest', 'py.test'}:\n` +
+    `        pytest_args = argv[1:]\n` +
+    `    else:\n` +
+    `        raise SystemExit('mutmut --test-command must invoke pytest directly or as python -m pytest')\n` +
+    `    parser['mutmut']['pytest_add_cli_args_test_selection'] = '\\n'.join(pytest_args)\n` +
     `with cfg.open('w') as f:\n` +
     `    parser.write(f)\n` +
     `PY\n` +
+    `config_code=$?; ` +
+    `if [ $config_code -ne 0 ]; then ` +
+    `if [ $has_setup_cfg -eq 1 ]; then mv "$backup" setup.cfg; else rm -f setup.cfg; fi; ` +
+    `rm -rf mutants; exit $config_code; fi; ` +
     `mutmut run 1>&2; code=$?; ` +
     `if [ $code -eq 0 ]; then mutmut results --all true; code=$?; fi; ` +
     `if [ $has_setup_cfg -eq 1 ]; then mv \"$backup\" setup.cfg; else rm -f setup.cfg; fi; ` +
