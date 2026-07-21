@@ -496,6 +496,10 @@ function runStrykerNetInProjectGroups(
     const command = `${dotnetBin} ${args.join(" ")}`;
     const result = spawnSync(dotnetBin, args, {
       cwd: projectDir,
+      env: {
+        ...process.env,
+        DOTNET_ROLL_FORWARD: process.env.DOTNET_ROLL_FORWARD || "LatestMajor",
+      },
       encoding: "utf8" as const,
       timeout: timeoutMs,
       maxBuffer: 64 * 1024 * 1024,
@@ -840,8 +844,8 @@ function buildCommand(config: MutationConfig, sourceFiles: string[], workDir: st
     case "cargo-mutants":
       return buildCargoMutantsCommand(sourceFiles, workDir);
     case "mutmut":
-      // mutmut 3 is config-driven (repo [mutmut] section); no per-call test command.
-      return buildMutmutCommand(sourceFiles, workDir);
+      // mutmut 3 is config-driven; adapt a pytest test command into its temporary config.
+      return buildMutmutCommand(sourceFiles, workDir, config.testCommand);
     case "gomu":
       return buildGomuCommand(sourceFiles, workDir);
     case "stryker-cxx":

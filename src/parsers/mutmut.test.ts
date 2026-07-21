@@ -15,6 +15,11 @@ const REAL_OUTPUT = `    calclib.tested.x_add__mutmut_1: killed
 const HYPHENATED_PATH_OUTPUT =
   "    plugins.issue-loop.scripts.issue_loop.x_utcnow__mutmut_1: survived\n";
 
+// Captured from a REAL mutmut 3.6.0 run against KVMD's Hid class (2026-07-19).
+const CLASS_METHOD_OUTPUT = `    kvmd.apps.localhid.hid.xǁHidǁ__init____mutmut_1: killed
+    kvmd.apps.localhid.hid.xǁHidǁ__init____mutmut_2: survived
+`;
+
 describe("parseMutmut (mutmut 3 results lines)", () => {
   it("maps module paths to files and scopes to changed files", () => {
     const r = parseMutmut(REAL_OUTPUT, ["calclib/tested.py", "calclib/untested.py"]);
@@ -42,6 +47,15 @@ describe("parseMutmut (mutmut 3 results lines)", () => {
     assert.equal(r.survivingMutants[0].file, "plugins/issue-loop/scripts/issue_loop.py");
   });
 
+  it("accepts mutmut class-method result names", () => {
+    const r = parseMutmut(CLASS_METHOD_OUTPUT, ["kvmd/apps/localhid/hid.py"]);
+    assert.equal(r.error, null);
+    assert.equal(r.totalMutants, 2);
+    assert.equal(r.killed, 1);
+    assert.equal(r.survived, 1);
+    assert.equal(r.survivingMutants[0].description, "Hid.__init__ mutant 2 (survived)");
+  });
+
   it("errors when no result lines match the changed files", () => {
     const r = parseMutmut(REAL_OUTPUT, ["other/module.py"]);
     assert.notEqual(r.error, null);
@@ -55,11 +69,19 @@ describe("parseMutmut (mutmut 3 results lines)", () => {
 
 describe("buildMutmutCommand", () => {
   it("rebuilds source_paths in a temporary scoped setup.cfg for changed py files", () => {
-    const cmd = buildMutmutCommand(["calclib/tested.py:3-6"], "/repo");
+    const cmd = buildMutmutCommand(
+      ["calclib/tested.py:3-6"],
+      "/repo",
+      "python3 -m pytest tests/test_calc.py -q",
+    );
     assert.ok(cmd.startsWith("cd '/repo' && rm -rf mutants && "));
     assert.ok(cmd.includes("python3 - <<'PY'"));
     assert.ok(cmd.includes("parser['mutmut']['source_paths']"));
-    assert.ok(cmd.includes("source_paths'] ="));
+    assert.ok(cmd.includes("source_paths'] = '\\n'.join(paths)"));
+    assert.ok(cmd.includes("export MUTMUT_SOURCE_PATHS='[\"calclib/tested.py\"]'"));
+    assert.ok(cmd.includes("pytest_add_cli_args_test_selection"));
+    assert.ok(cmd.includes("python3 -m pytest tests/test_calc.py -q"));
+    assert.ok(cmd.includes("config_code=$?"));
     assert.ok(cmd.includes("mutmut results --all true"));
     assert.ok(cmd.includes("mutmut run 1>&2"));
     assert.ok(cmd.includes("cp setup.cfg"));
@@ -73,6 +95,7 @@ describe("buildMutmutCommand", () => {
       "/repo",
     );
     assert.ok(cmd.includes("json.loads"));
-    assert.ok(cmd.includes("for p in paths"));
+    assert.equal(cmd.match(/plugins\/issue-loop\/scripts\/issue_loop\.py/g)?.length, 1);
+    assert.ok(cmd.includes("other.py"));
   });
 });
