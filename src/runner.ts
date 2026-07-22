@@ -952,11 +952,15 @@ function isTestFile(file: string): boolean {
   ) {
     return true;
   }
-  // CamelCase test conventions common in .NET (and elsewhere): a *Tests/ or *Test/ project dir
-  // (e.g. DS4WindowsTests/, Foo.Tests/), or a *Tests.cs / *Test.cs source file (WidgetTest.cs).
-  // Matched CASE-SENSITIVELY (require a capital T) so "latest.cs" / "greatest/…" / "Contest.cs"
-  // are NOT misread as tests — a false positive here silently drops real source from mutation.
-  if (/(?:^|\/)[A-Za-z0-9_.]*Tests?\//.test(file)) return true;
+  // CamelCase test conventions common in .NET (and elsewhere): a *Tests/ project dir
+  // (e.g. DS4WindowsTests/, Foo.UnitTests/) or a dotted *.Test(s)/ dir (Foo.Tests/, Bar.Test/), or a
+  // *Tests.cs / *Test.cs source file (WidgetTest.cs). Matched CASE-SENSITIVELY (require a capital T)
+  // so "latest.cs" / "greatest/…" / "Contest.cs" are NOT misread as tests — a false positive here
+  // silently drops real source from mutation. The dir marker requires PLURAL "Tests" or a dot right
+  // before "Test", so a PRODUCTION project/folder whose name merely ends in a singular "Test"
+  // (Stryker.TestRunner.VsTest/, .../MutationTest/, .../IntegrationTest/) is not misread as a test
+  // project — that regression dropped whole PRs from mutation.
+  if (/(?:^|\/)[A-Za-z0-9_.]*Tests\//.test(file) || /\.Tests?\//.test(file)) return true;
   // Allow the *Tests/*Test token to be preceded by start, "/", or "." so dotted basenames like
   // Foo.Tests.cs and Foo.BarTests.cs are caught, not just CamelCase WidgetTest.cs.
   if (/(?:^|[/.])[A-Za-z0-9_]*Tests?\.(?:cs|fs|vb)$/.test(file)) return true;
