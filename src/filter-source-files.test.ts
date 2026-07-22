@@ -50,6 +50,25 @@ test("dotted .NET test basenames are excluded, look-alikes kept", () => {
   assert.deepEqual(out.sort(), ["src/Latest.cs", "src/MyGreatestHits.cs", "src/Widget.cs"].sort());
 });
 
+test("production dirs ending in a singular 'Test' are NOT dropped as test projects", () => {
+  // Regression: a name/folder merely ending in "Test" (VsTest, MutationTest, IntegrationTest as a
+  // source folder) was misread as a test dir, so whole PRs mutated nothing ("no mutatable sources").
+  const out = filterSourceFiles(
+    [
+      "src/Stryker.TestRunner.VsTest/VsTestRunner.cs", // production project ending in "VsTest" -> KEEP
+      "src/Stryker.Core/Stryker.Core/MutationTest/MutationTestProcess.cs", // "MutationTest/" folder -> KEEP
+      "src/Stryker.TestRunner.VsTest.UnitTest/VsTestRunnerPoolTests.cs", // *Tests.cs test file -> drop
+      "src/Foo.UnitTests/Helper.cs", // plural "Tests/" dir -> drop
+      "src/Bar.Test/Thing.cs", // dotted ".Test/" dir -> drop
+    ],
+    "stryker-net",
+  );
+  assert.deepEqual(out.sort(), [
+    "src/Stryker.Core/Stryker.Core/MutationTest/MutationTestProcess.cs",
+    "src/Stryker.TestRunner.VsTest/VsTestRunner.cs",
+  ].sort());
+});
+
 test("redactSecrets masks auth-like values in a logged command, leaves the rest", () => {
   assert.equal(
     redactSecrets("dotnet stryker --mutate '**/A.cs' --test-command 'curl -H \"Authorization: Bearer abc123\" x'"),
